@@ -17,9 +17,9 @@ def create_triage_agent() -> ChatAgent:
     settings = get_azure_openai_settings()
 
     chat_client = AzureOpenAIChatClient(
-        api_key=settings.api_key,
-        endpoint=settings.endpoint,
-        deployment_name=settings.deployment_name,
+        api_key=settings.azure_openai_api_key,
+        endpoint=settings.azure_openai_endpoint,
+        deployment_name=TRIAGE_AGENT.deployment_name or settings.azure_openai_deployment_name,
     )
 
     return ChatAgent(

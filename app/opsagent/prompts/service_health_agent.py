@@ -9,8 +9,7 @@ class ServiceHealthAgentConfig:
 
     name: str = "service-health-agent"
     description: str = "Monitors health status of Databricks, Snowflake, and Azure services"
-    model_id: str = "gpt-4.1"
-    api_version: str = "2024-12-01-preview"
+    deployment_name: str = ""
     instructions: str = """You are a service health monitoring assistant. You check the status of:
 - Databricks (workspace and clusters)
 - Snowflake (warehouses)

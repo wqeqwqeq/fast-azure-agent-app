@@ -9,8 +9,7 @@ class LogAnalyticsAgentConfig:
 
     name: str = "log-analytics-agent"
     description: str = "Queries Azure Data Factory pipeline execution logs"
-    model_id: str = "gpt-4.1"
-    api_version: str = "2024-12-01-preview"
+    deployment_name: str = ""
     instructions: str = """You are an Azure Log Analytics assistant for ADF pipeline monitoring.
 
 You can:

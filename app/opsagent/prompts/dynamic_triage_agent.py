@@ -9,8 +9,7 @@ class DynamicTriageAgentConfig:
 
     name: str = "dynamic-triage-agent"
     description: str = "Dynamic triage agent that plans multi-step agent execution with support for user and review modes"
-    model_id: str = "gpt-4.1"
-    api_version: str = "2024-12-01-preview"
+    deployment_name: str = ""
     instructions: str = """You are a dynamic triage agent that plans multi-step agent execution based on user queries or review feedback.
 
 ## Your Modes

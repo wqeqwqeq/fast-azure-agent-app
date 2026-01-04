@@ -9,8 +9,7 @@ class TriageAgentConfig:
 
     name: str = "triage-agent"
     description: str = "Routes user queries to specialized IT operations agents"
-    model_id: str = "gpt-4.1"
-    api_version: str = "2024-12-01-preview"
+    deployment_name: str = ""
     instructions: str = """You are a triage agent for IT operations. Your job is to analyze the user's **LATEST question** and route it to the appropriate specialized agent(s).
 
 ## IMPORTANT: Focus on the Latest Question

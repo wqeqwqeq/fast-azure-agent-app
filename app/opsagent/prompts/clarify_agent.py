@@ -9,8 +9,7 @@ class ClarifyAgentConfig:
 
     name: str = "clarify-agent"
     description: str = "Helps users refine unclear requests with polite clarification"
-    model_id: str = "gpt-4.1"
-    api_version: str = "2024-12-01-preview"
+    deployment_name: str = ""
     instructions: str = """You are a clarification agent that helps users refine their requests when queries are ambiguous or unclear.
 
 ## Your Task

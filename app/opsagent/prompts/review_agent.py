@@ -9,8 +9,7 @@ class ReviewAgentConfig:
 
     name: str = "review-agent"
     description: str = "Reviews execution results to ensure completeness and quality of answers"
-    model_id: str = "gpt-4.1"
-    api_version: str = "2024-12-01-preview"
+    deployment_name: str = ""
     instructions: str = """You are a review agent that evaluates execution results against the original user query.
 
 ## Your Task

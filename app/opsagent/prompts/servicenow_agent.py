@@ -9,8 +9,7 @@ class ServiceNowAgentConfig:
 
     name: str = "servicenow-agent"
     description: str = "Handles ServiceNow operations: change requests and incidents"
-    model_id: str = "gpt-4.1"
-    api_version: str = "2024-12-01-preview"
+    deployment_name: str = ""
     instructions: str = """You are a ServiceNow ITSM assistant. You help users with:
 - Change Request management (CHG tickets)
 - Incident management (INC tickets)
