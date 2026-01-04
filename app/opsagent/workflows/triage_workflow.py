@@ -1,3 +1,5 @@
+"""Triage Workflow with fan-out/fan-in pattern for multi-agent execution."""
+
 from dataclasses import dataclass
 from typing import Literal
 
@@ -17,6 +19,8 @@ from agent_framework import (
 from pydantic import BaseModel
 from typing_extensions import Never
 
+from ..schemas.triage import TaskAssignment, TriageOutput
+
 
 # === Custom Response for Fan-In ===
 @dataclass
@@ -33,21 +37,6 @@ class MessageData(BaseModel):
 
     role: str
     text: str
-
-
-class TaskAssignment(BaseModel):
-    """A single task assignment to a specialized agent."""
-
-    question: str
-    agent: Literal["servicenow", "log_analytics", "service_health"]
-
-
-class TriageOutput(BaseModel):
-    """Structured output from the triage agent."""
-
-    should_reject: bool
-    reject_reason: str
-    tasks: list[TaskAssignment]
 
 
 # === Dataclass for workflow routing ===

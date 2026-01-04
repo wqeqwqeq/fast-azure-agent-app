@@ -10,7 +10,6 @@ This workflow implements:
 import asyncio
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Literal
 
 from agent_framework import (
     ChatAgent,
@@ -25,13 +24,9 @@ from agent_framework import (
 from pydantic import BaseModel
 from typing_extensions import Never
 
-from ..agents.clarify_agent import ClarifyOutput
-from ..agents.dynamic_triage_agent import (
-    PlanStep,
-    ReviewModeOutput,
-    UserModeOutput,
-)
-from ..agents.review_agent import ReviewOutput
+from ..schemas.triage import PlanStep, UserModeOutput, ReviewModeOutput
+from ..schemas.review import ReviewOutput
+from ..schemas.clarify import ClarifyOutput
 
 
 # === Pydantic Models for Input ===

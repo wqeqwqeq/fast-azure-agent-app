@@ -42,7 +42,7 @@ def get_appinsights_connection_string() -> str:
     vault_name = f"{RESOURCE_PREFIX.replace('-', '')}kv"
     if vault_name:
         try:
-            from opsagent.utils.keyvault import AKV
+            from ..utils.keyvault import AKV
             akv = AKV(vault_name)
             secret_value = akv.get_secret("APPLICATIONINSIGHTS-CONNECTION-STRING")
             if secret_value:

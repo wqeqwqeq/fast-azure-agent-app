@@ -1,25 +1,23 @@
-from pathlib import Path
+"""Service Health Agent for monitoring data services."""
 
 from agent_framework import ChatAgent
 from agent_framework.azure import AzureOpenAIChatClient
 
-from ..utils.observability import (
+from ..middleware.observability import (
     observability_agent_middleware,
     observability_function_middleware,
 )
+from ..prompts.service_health_agent import SERVICE_HEALTH_AGENT
 from ..tools.service_health_tools import (
     check_azure_service_health,
     check_databricks_health,
     check_snowflake_health,
 )
-from ..utils.config_loader import load_agent_config
 from ..utils.settings import get_azure_openai_settings
 
 
 def create_service_health_agent() -> ChatAgent:
     """Create and return the Service Health agent."""
-    config_path = Path(__file__).parent.parent / "config" / "service_health_agent.yaml"
-    config = load_agent_config(str(config_path))
     settings = get_azure_openai_settings()
 
     chat_client = AzureOpenAIChatClient(
@@ -29,9 +27,9 @@ def create_service_health_agent() -> ChatAgent:
     )
 
     return ChatAgent(
-        name=config.name,
-        description=config.description,
-        instructions=config.instructions,
+        name=SERVICE_HEALTH_AGENT.name,
+        description=SERVICE_HEALTH_AGENT.description,
+        instructions=SERVICE_HEALTH_AGENT.instructions,
         chat_client=chat_client,
         tools=[check_databricks_health, check_snowflake_health, check_azure_service_health],
         middleware=[
