@@ -99,7 +99,6 @@ elif [ "$MODE" = "app" ]; then
         "AZURE_LOCATION"
         "RESOURCE_PREFIX"
         "APP_SERVICE_SKU"
-        "TOKEN_PROVIDER_APP_ID"
         "POSTGRES_ADMIN_LOGIN"
         "POSTGRES_SKU"
         "POSTGRES_STORAGE_GB"
@@ -218,7 +217,6 @@ elif [ "$MODE" = "app" ]; then
             location="$AZURE_LOCATION" \
             resourcePrefix="$RESOURCE_PREFIX" \
             skuName="$APP_SERVICE_SKU" \
-            tokenProviderAppId="$TOKEN_PROVIDER_APP_ID" \
             postgresAdminLogin="$POSTGRES_ADMIN_LOGIN" \
             postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD" \
             postgresSku="$POSTGRES_SKU" \
@@ -242,7 +240,6 @@ elif [ "$MODE" = "app" ]; then
             location="$AZURE_LOCATION" \
             resourcePrefix="$RESOURCE_PREFIX" \
             skuName="$APP_SERVICE_SKU" \
-            tokenProviderAppId="$TOKEN_PROVIDER_APP_ID" \
             postgresAdminLogin="$POSTGRES_ADMIN_LOGIN" \
             postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD" \
             postgresSku="$POSTGRES_SKU" \
@@ -255,6 +252,7 @@ elif [ "$MODE" = "app" ]; then
         echo "✅ Infrastructure deployed successfully!"
         echo ""
         echo "📋 Resources created:"
+        echo "   - App Registration: ${RESOURCE_PREFIX}-app-registration"
         echo "   - App Service: ${RESOURCE_PREFIX}-app"
         echo "   - App Service Plan: ${RESOURCE_PREFIX}-plan"
         echo "   - PostgreSQL: ${RESOURCE_PREFIX}-postgres"
@@ -268,9 +266,11 @@ elif [ "$MODE" = "app" ]; then
         echo "   - Public IP: ${RESOURCE_PREFIX}-nat-pip"
         echo ""
         echo "📋 Next steps:"
-        echo "   1. Get Redis credentials from Azure Portal or outputs"
-        echo "   2. Initialize database and deploy app: ./deploy_script.sh"
-        echo "   3. View your app: https://${RESOURCE_PREFIX}-app.azurewebsites.net"
+        echo "   1. Create client secret for App Registration in Azure Portal"
+        echo "   2. Store secret as MICROSOFT_PROVIDER_AUTHENTICATION_SECRET in Key Vault"
+        echo "   3. Get Redis credentials from Azure Portal or outputs"
+        echo "   4. Initialize database and deploy app: ./deploy_script.sh"
+        echo "   5. View your app: https://${RESOURCE_PREFIX}-app.azurewebsites.net"
         echo ""
     fi
 fi

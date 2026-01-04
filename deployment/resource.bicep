@@ -1,7 +1,8 @@
+extension microsoftGraphV1
+
 param resourcePrefix string = 'stanley-dev-ui'
 param location string = resourceGroup().location
 param skuName string = 'b1'
-param tokenProviderAppId string = '9ec6a2d4-9b95-4f01-b5d0-07eb4da70508'
 
 @secure()
 @description('PostgreSQL administrator login password')
@@ -33,6 +34,41 @@ var postgresServerName = '${resourcePrefix}-postgres'
 var redisServerName = '${resourcePrefix}-redis'
 var AppSubnetName = 'appServiceSubnet'
 
+// ======================== Azure AD Application Registration ========================
+
+// Application registration for Azure AD authentication
+resource appRegistration 'Microsoft.Graph/applications@v1.0' = {
+  uniqueName: '${resourcePrefix}-app-registration'
+  displayName: '${resourcePrefix} App'
+  signInAudience: 'AzureADMyOrg'
+
+  web: {
+    redirectUris: [
+      'https://${resourcePrefix}-app.azurewebsites.net/.auth/login/aad/callback'
+    ]
+    implicitGrantSettings: {
+      enableIdTokenIssuance: true
+      enableAccessTokenIssuance: false
+    }
+  }
+
+  requiredResourceAccess: [
+    {
+      resourceAppId: '00000003-0000-0000-c000-000000000000'  // Microsoft Graph
+      resourceAccess: [
+        {
+          id: 'e1fe6dd8-ba31-4d61-89e7-88639da4683d'  // User.Read
+          type: 'Scope'
+        }
+      ]
+    }
+  ]
+}
+
+// Service principal for the application
+resource appServicePrincipal 'Microsoft.Graph/servicePrincipals@v1.0' = {
+  appId: appRegistration.appId
+}
 
 // https://docs.microsoft.com/en-us/azure/templates/microsoft.managedidentity/userassignedidentities?t…
 resource userAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' = {
@@ -281,7 +317,7 @@ resource appConfig 'Microsoft.Web/sites/config@2022-09-01' = {
         enabled: true
         registration: {
           openIdIssuer: 'https://sts.windows.net/${subscription().tenantId}/v2.0'
-          clientId: tokenProviderAppId
+          clientId: appRegistration.appId
           clientSecretSettingName: 'MICROSOFT_PROVIDER_AUTHENTICATION_SECRET'
         }
         login: {
@@ -290,7 +326,7 @@ resource appConfig 'Microsoft.Web/sites/config@2022-09-01' = {
         validation: {
           jwtClaimChecks: {}
           allowedAudiences: [
-            'api://${tokenProviderAppId}'
+            'api://${appRegistration.appId}'
           ]
           defaultAuthorizationPolicy: {
             allowedPrincipals: {}
@@ -555,3 +591,5 @@ output acrName string = containerRegistry.name
 output natGatewayPublicIP string = natPublicIP.properties.ipAddress
 output vnetId string = virtualNetwork.id
 output appServiceSubnetId string = virtualNetwork.properties.subnets[0].id
+output appRegistrationAppId string = appRegistration.appId
+output appRegistrationObjectId string = appRegistration.id
