@@ -10,12 +10,15 @@ from agent_framework.azure import AzureOpenAIChatClient
 
 from ..middleware.observability import observability_agent_middleware
 from ..prompts.dynamic_triage_agent import DYNAMIC_TRIAGE_AGENT
-from ..schemas.triage import UserModeOutput, ReviewModeOutput
+from ..schemas.dynamic_triage import (
+    DynamicTriageUserModeOutput,
+    DynamicTriageReviewModeOutput,
+)
 from ..utils.settings import get_azure_openai_settings
 
 
 def create_user_mode_triage_agent() -> ChatAgent:
-    """Create triage agent for user mode with UserModeOutput response format."""
+    """Create triage agent for user mode with DynamicTriageUserModeOutput response format."""
     settings = get_azure_openai_settings()
 
     chat_client = AzureOpenAIChatClient(
@@ -29,13 +32,13 @@ def create_user_mode_triage_agent() -> ChatAgent:
         description=DYNAMIC_TRIAGE_AGENT.description,
         instructions=DYNAMIC_TRIAGE_AGENT.instructions,
         chat_client=chat_client,
-        response_format=UserModeOutput,
+        response_format=DynamicTriageUserModeOutput,
         middleware=[observability_agent_middleware],
     )
 
 
 def create_review_mode_triage_agent() -> ChatAgent:
-    """Create triage agent for review mode with ReviewModeOutput response format."""
+    """Create triage agent for review mode with DynamicTriageReviewModeOutput response format."""
     settings = get_azure_openai_settings()
 
     chat_client = AzureOpenAIChatClient(
@@ -49,6 +52,6 @@ def create_review_mode_triage_agent() -> ChatAgent:
         description=DYNAMIC_TRIAGE_AGENT.description,
         instructions=DYNAMIC_TRIAGE_AGENT.instructions,
         chat_client=chat_client,
-        response_format=ReviewModeOutput,
+        response_format=DynamicTriageReviewModeOutput,
         middleware=[observability_agent_middleware],
     )

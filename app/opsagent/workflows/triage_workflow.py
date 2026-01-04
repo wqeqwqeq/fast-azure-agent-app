@@ -1,7 +1,6 @@
 """Triage Workflow with fan-out/fan-in pattern for multi-agent execution."""
 
 from dataclasses import dataclass
-from typing import Literal
 
 from agent_framework import (
     AgentExecutor,
@@ -16,9 +15,9 @@ from agent_framework import (
     executor,
     handler,
 )
-from pydantic import BaseModel
 from typing_extensions import Never
 
+from ..schemas.common import MessageData, WorkflowInput
 from ..schemas.triage import TaskAssignment, TriageOutput
 
 
@@ -29,33 +28,6 @@ class AgentResponse:
 
     executor_id: str
     text: str
-
-
-# === Pydantic Models for Input/Output ===
-class MessageData(BaseModel):
-    """Raw message data for DevUI compatibility."""
-
-    role: str
-    text: str
-
-
-# === Dataclass for workflow routing ===
-@dataclass
-class TriageResult:
-    """Internal dataclass for routing decisions in the workflow."""
-
-    should_reject: bool
-    reject_reason: str
-    tasks: list[TaskAssignment]
-    original_query: str
-
-
-# === Input type for workflow ===
-class WorkflowInput(BaseModel):
-    """Input for the triage workflow."""
-
-    query: str = ""  # Simple string input for DevUI
-    messages: list[MessageData] = []  # Full message history for Flask
 
 
 # === Executors ===
@@ -83,7 +55,7 @@ async def store_query(
     # Store the full conversation history for reference
     await ctx.set_shared_state("conversation_history", chat_messages)
 
-    # Extract latest user query for original_query (used in TriageResult)
+    # Extract latest user query for original_query
     latest_query = ""
     for msg in reversed(chat_messages):
         if msg.role == Role.USER:
@@ -99,27 +71,19 @@ async def store_query(
 
 @executor(id="parse_triage_output")
 async def parse_triage_output(
-    response: AgentExecutorResponse, ctx: WorkflowContext[TriageResult]
+    response: AgentExecutorResponse, ctx: WorkflowContext[TriageOutput]
 ) -> None:
-    """Parse triage agent JSON output into TriageResult for routing."""
+    """Parse triage agent JSON output into TriageOutput for routing."""
     triage = TriageOutput.model_validate_json(response.agent_run_response.text)
-    original_query = await ctx.get_shared_state("original_query")
 
     # Store tasks in shared state for agent bridges to access
     await ctx.set_shared_state("tasks", triage.tasks)
 
-    await ctx.send_message(
-        TriageResult(
-            should_reject=triage.should_reject,
-            reject_reason=triage.reject_reason,
-            tasks=triage.tasks,
-            original_query=original_query,
-        )
-    )
+    await ctx.send_message(triage)
 
 
 @executor(id="reject_query")
-async def reject_query(triage: TriageResult, ctx: WorkflowContext[Never, str]) -> None:
+async def reject_query(triage: TriageOutput, ctx: WorkflowContext[Never, str]) -> None:
     """Handle rejected queries."""
     await ctx.yield_output(
         f"I don't have knowledge about that topic. {triage.reject_reason}\n\n"
@@ -139,7 +103,7 @@ class DispatchToAgents(Executor):
 
     @handler
     async def dispatch(
-        self, triage: TriageResult, ctx: WorkflowContext[TriageResult]
+        self, triage: TriageOutput, ctx: WorkflowContext[TriageOutput]
     ) -> None:
         # Only dispatch if not rejected and has tasks
         if not triage.should_reject and triage.tasks:
@@ -159,7 +123,7 @@ class FilteredAgentExecutor(Executor):
 
     @handler
     async def handle(
-        self, triage: TriageResult, ctx: WorkflowContext[AgentResponse]
+        self, triage: TriageOutput, ctx: WorkflowContext[AgentResponse]
     ) -> None:
         # Collect all tasks for this agent
         questions = [
@@ -222,7 +186,7 @@ class AggregateResponses(Executor):
 
 
 # === Selection Function for Dispatch vs Reject ===
-def select_dispatch_or_reject(triage: TriageResult, target_ids: list[str]) -> list[str]:
+def select_dispatch_or_reject(triage: TriageOutput, target_ids: list[str]) -> list[str]:
     """Select dispatcher or reject based on triage result.
 
     target_ids order: [dispatch_to_agents, reject_query]

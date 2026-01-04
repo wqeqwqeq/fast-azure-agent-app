@@ -21,51 +21,19 @@ from agent_framework import (
     executor,
     handler,
 )
-from pydantic import BaseModel
 from typing_extensions import Never
 
-from ..schemas.triage import PlanStep, UserModeOutput, ReviewModeOutput
+from ..schemas.common import MessageData, WorkflowInput
+from ..schemas.dynamic_triage import (
+    DynamicTriagePlanStep,
+    DynamicTriageUserModeOutput,
+    DynamicTriageReviewModeOutput,
+)
 from ..schemas.review import ReviewOutput
 from ..schemas.clarify import ClarifyOutput
 
 
-# === Pydantic Models for Input ===
-class MessageData(BaseModel):
-    """Raw message data for Flask compatibility."""
-
-    role: str
-    text: str
-
-
-class WorkflowInput(BaseModel):
-    """Input for the dynamic workflow."""
-
-    query: str = ""  # Simple string input for DevUI
-    messages: list[MessageData] = []  # Full message history for Flask
-
-
-# === Internal Dataclasses for Routing ===
-@dataclass
-class TriageUserResult:
-    """Result from triage in user mode."""
-
-    should_reject: bool
-    reject_reason: str
-    clarify: bool
-    plan: list[PlanStep]
-    plan_reason: str
-    original_query: str
-
-
-@dataclass
-class TriageReviewResult:
-    """Result from triage in review mode."""
-
-    accept_review: bool
-    new_plan: list[PlanStep]
-    rejection_reason: str
-
-
+# === Internal Dataclasses for Workflow Routing ===
 @dataclass
 class ExecutionResult:
     """Result from a single agent execution."""
@@ -80,14 +48,12 @@ class StepResults:
     """Results from all steps of execution."""
 
     results: dict[int, list[ExecutionResult]] = field(default_factory=dict)
-    original_query: str = ""
 
 
 @dataclass
 class ReviewRequest:
     """Request for review agent."""
 
-    original_query: str
     execution_results: dict[int, list[ExecutionResult]]
     is_retry: bool
 
@@ -102,14 +68,6 @@ class ReviewDecision:
     suggested_approach: str
     confidence: float
     execution_results: dict[int, list[ExecutionResult]]
-    original_query: str
-
-
-@dataclass
-class ClarifyRequest:
-    """Request for clarify agent."""
-
-    original_query: str
 
 
 # === Request Types (must be defined before executors that use them) ===
@@ -118,7 +76,6 @@ class UserModeRequest:
     """Request to triage agent in user mode."""
 
     messages: list[ChatMessage]
-    original_query: str
 
 
 @dataclass
@@ -127,7 +84,6 @@ class ReviewModeRequest:
 
     review_feedback: ReviewDecision
     previous_results: dict[int, list[ExecutionResult]]
-    original_query: str
 
 
 # === Input Processing ===
@@ -164,9 +120,7 @@ async def store_query(
     await ctx.set_shared_state("retry_count", 0)
 
     # Send to triage in user mode
-    await ctx.send_message(
-        UserModeRequest(messages=chat_messages, original_query=latest_query)
-    )
+    await ctx.send_message(UserModeRequest(messages=chat_messages))
 
 
 # === User Mode Triage Executor ===
@@ -179,7 +133,7 @@ class UserModeTriageExecutor(Executor):
 
     @handler
     async def handle(
-        self, request: UserModeRequest, ctx: WorkflowContext[TriageUserResult]
+        self, request: UserModeRequest, ctx: WorkflowContext[DynamicTriageUserModeOutput]
     ) -> None:
         """Process user query and generate execution plan."""
         prompt = self._build_prompt(request.messages)
@@ -188,19 +142,10 @@ class UserModeTriageExecutor(Executor):
             messages=[ChatMessage(Role.USER, text=prompt)]
         )
 
-        # Parse response as UserModeOutput (strip markdown code blocks if present)
-        output = UserModeOutput.model_validate_json(response.text)
+        # Parse response as DynamicTriageUserModeOutput
+        output = DynamicTriageUserModeOutput.model_validate_json(response.text)
 
-        await ctx.send_message(
-            TriageUserResult(
-                should_reject=output.should_reject,
-                reject_reason=output.reject_reason,
-                clarify=output.clarify,
-                plan=output.plan,
-                plan_reason=output.plan_reason,
-                original_query=request.original_query,
-            )
-        )
+        await ctx.send_message(output)
 
     def _build_prompt(self, messages: list[ChatMessage]) -> str:
         """Build prompt for user mode triage."""
@@ -215,7 +160,7 @@ Analyze this conversation and create an execution plan.
 {history}
 
 ## Instructions
-Output a JSON object with UserModeOutput schema:
+Output a JSON object with DynamicTriageUserModeOutput schema:
 - should_reject: bool
 - reject_reason: str (if rejecting)
 - clarify: bool (if need clarification)
@@ -235,27 +180,22 @@ class ReviewModeTriageExecutor(Executor):
 
     @handler
     async def handle(
-        self, request: ReviewModeRequest, ctx: WorkflowContext[TriageReviewResult]
+        self, request: ReviewModeRequest, ctx: WorkflowContext[DynamicTriageReviewModeOutput]
     ) -> None:
         """Process reviewer feedback and decide on retry strategy."""
-        prompt = self._build_prompt(request)
+        original_query = await ctx.get_shared_state("original_query")
+        prompt = self._build_prompt(request, original_query)
 
         response = await self._agent.run(
             messages=[ChatMessage(Role.USER, text=prompt)]
         )
 
-        # Parse response as ReviewModeOutput (strip markdown code blocks if present)
-        output = ReviewModeOutput.model_validate_json(response.text)
+        # Parse response as DynamicTriageReviewModeOutput
+        output = DynamicTriageReviewModeOutput.model_validate_json(response.text)
 
-        await ctx.send_message(
-            TriageReviewResult(
-                accept_review=output.accept_review,
-                new_plan=output.new_plan,
-                rejection_reason=output.rejection_reason,
-            )
-        )
+        await ctx.send_message(output)
 
-    def _build_prompt(self, request: ReviewModeRequest) -> str:
+    def _build_prompt(self, request: ReviewModeRequest, original_query: str) -> str:
         """Build prompt for review mode triage."""
         # Format execution results
         results_str = self._format_execution_results(request.previous_results)
@@ -271,7 +211,7 @@ class ReviewModeTriageExecutor(Executor):
 The review agent found the following gaps in the response.
 
 ## Original Query
-{request.original_query}
+{original_query}
 
 ## Previous Execution Results
 {results_str}
@@ -281,7 +221,7 @@ The review agent found the following gaps in the response.
 
 ## Instructions
 Decide whether to accept or reject this review feedback.
-Output a JSON object with ReviewModeOutput schema:
+Output a JSON object with DynamicTriageReviewModeOutput schema:
 - accept_review: bool
 - new_plan: list of {{step, agent, question}} (if accepting)
 - rejection_reason: str (if rejecting)
@@ -306,7 +246,7 @@ Be critical - only accept if the gap is genuine and addressable."""
 # === Routing After User Mode Triage ===
 @executor(id="route_user_triage")
 async def route_user_triage(
-    triage: TriageUserResult, ctx: WorkflowContext[TriageUserResult]
+    triage: DynamicTriageUserModeOutput, ctx: WorkflowContext[DynamicTriageUserModeOutput]
 ) -> None:
     """Route based on user mode triage result."""
     # Store plan for orchestrator
@@ -315,7 +255,7 @@ async def route_user_triage(
 
 
 def select_user_triage_path(
-    triage: TriageUserResult, target_ids: list[str]
+    triage: DynamicTriageUserModeOutput, target_ids: list[str]
 ) -> list[str]:
     """Select path after user mode triage.
 
@@ -334,7 +274,7 @@ def select_user_triage_path(
 # === Reject Handler ===
 @executor(id="reject_query")
 async def reject_query(
-    triage: TriageUserResult, ctx: WorkflowContext[Never, str]
+    triage: DynamicTriageUserModeOutput, ctx: WorkflowContext[Never, str]
 ) -> None:
     """Handle rejected queries."""
     await ctx.yield_output(
@@ -356,10 +296,11 @@ class ClarifyExecutor(Executor):
 
     @handler
     async def handle(
-        self, triage: TriageUserResult, ctx: WorkflowContext[Never, str]
+        self, triage: DynamicTriageUserModeOutput, ctx: WorkflowContext[Never, str]
     ) -> None:
         """Generate clarification request."""
-        prompt = f"""The user asked: "{triage.original_query}"
+        original_query = await ctx.get_shared_state("original_query")
+        prompt = f"""The user asked: "{original_query}"
 
 This query is related to data operations but is unclear or ambiguous.
 Please provide a polite clarification request.
@@ -393,17 +334,16 @@ class DynamicOrchestrator(Executor):
 
     @handler
     async def execute_plan(
-        self, triage: TriageUserResult, ctx: WorkflowContext[ReviewRequest]
+        self, triage: DynamicTriageUserModeOutput, ctx: WorkflowContext[ReviewRequest]
     ) -> None:
         """Execute the plan from user mode triage."""
-        await self._execute(triage.plan, triage.original_query, ctx, is_retry=False)
+        await self._execute(triage.plan, ctx, is_retry=False)
 
     @handler
     async def execute_new_plan(
-        self, triage: TriageReviewResult, ctx: WorkflowContext[ReviewRequest]
+        self, triage: DynamicTriageReviewModeOutput, ctx: WorkflowContext[ReviewRequest]
     ) -> None:
         """Execute new plan from review mode (retry)."""
-        original_query = await ctx.get_shared_state("original_query")
         previous_results = await ctx.get_shared_state("execution_results") or {}
 
         # Execute new plan
@@ -421,7 +361,6 @@ class DynamicOrchestrator(Executor):
         # Send to review
         await ctx.send_message(
             ReviewRequest(
-                original_query=original_query,
                 execution_results=merged_results,
                 is_retry=True,
             )
@@ -429,8 +368,7 @@ class DynamicOrchestrator(Executor):
 
     async def _execute(
         self,
-        plan: list[PlanStep],
-        original_query: str,
+        plan: list[DynamicTriagePlanStep],
         ctx: WorkflowContext,
         is_retry: bool,
     ) -> None:
@@ -443,7 +381,6 @@ class DynamicOrchestrator(Executor):
         # Send to review
         await ctx.send_message(
             ReviewRequest(
-                original_query=original_query,
                 execution_results=all_results,
                 is_retry=is_retry,
             )
@@ -451,14 +388,14 @@ class DynamicOrchestrator(Executor):
 
     async def _run_plan(
         self,
-        plan: list[PlanStep],
+        plan: list[DynamicTriagePlanStep],
         existing_results: dict[int, list[ExecutionResult]],
     ) -> dict[int, list[ExecutionResult]]:
         """Run a plan with step-based parallelism."""
         all_results: dict[int, list[ExecutionResult]] = {}
 
         # Group tasks by step number
-        steps_grouped: dict[int, list[PlanStep]] = defaultdict(list)
+        steps_grouped: dict[int, list[DynamicTriagePlanStep]] = defaultdict(list)
         for task in plan:
             steps_grouped[task.step].append(task)
 
@@ -487,11 +424,11 @@ class DynamicOrchestrator(Executor):
         return all_results
 
     async def _execute_step_parallel(
-        self, tasks: list[PlanStep], context: str
+        self, tasks: list[DynamicTriagePlanStep], context: str
     ) -> list[ExecutionResult]:
         """Execute all tasks in a step concurrently."""
 
-        async def run_single_task(task: PlanStep) -> ExecutionResult:
+        async def run_single_task(task: DynamicTriagePlanStep) -> ExecutionResult:
             agent = self._agents[task.agent]
 
             # Build message with context if available
@@ -528,13 +465,14 @@ class ReviewExecutor(Executor):
     ) -> None:
         """Review execution results for completeness."""
         retry_count = await ctx.get_shared_state("retry_count") or 0
+        original_query = await ctx.get_shared_state("original_query")
 
         # Build review prompt
         results_str = self._format_results(request.execution_results)
         prompt = f"""## Review Request
 
 ## Original User Query
-{request.original_query}
+{original_query}
 
 ## Execution Results
 {results_str}
@@ -570,7 +508,6 @@ Output JSON with ReviewOutput schema:
                 suggested_approach=output.suggested_approach,
                 confidence=output.confidence,
                 execution_results=request.execution_results,
-                original_query=request.original_query,
             )
         )
 
@@ -630,32 +567,17 @@ async def triage_review_bridge(
     decision: ReviewDecision, ctx: WorkflowContext[ReviewModeRequest]
 ) -> None:
     """Bridge review decision to triage in review mode."""
-    retry_count = await ctx.get_shared_state("retry_count") or 0
-
-    # If max retries reached, output directly
-    if retry_count > 1:
-        # Force completion
-        await ctx.send_message(
-            ReviewModeRequest(
-                review_feedback=decision,
-                previous_results=decision.execution_results,
-                original_query=decision.original_query,
-            )
-        )
-        return
-
     await ctx.send_message(
         ReviewModeRequest(
             review_feedback=decision,
             previous_results=decision.execution_results,
-            original_query=decision.original_query,
         )
     )
 
 
 # === Review Mode Response Routing ===
 def select_triage_review_outcome(
-    triage: TriageReviewResult, target_ids: list[str]
+    triage: DynamicTriageReviewModeOutput, target_ids: list[str]
 ) -> list[str]:
     """Select path after triage review mode.
 
@@ -672,7 +594,7 @@ def select_triage_review_outcome(
 # === Output Existing Response (when triage rejects review) ===
 @executor(id="output_existing")
 async def output_existing(
-    triage: TriageReviewResult, ctx: WorkflowContext[Never, str]
+    triage: DynamicTriageReviewModeOutput, ctx: WorkflowContext[Never, str]
 ) -> None:
     """Output existing response when triage rejects review feedback."""
     execution_results = await ctx.get_shared_state("execution_results")
