@@ -2,18 +2,18 @@
 Observability module for agent middleware.
 
 Provides real-time streaming of agent thinking events to the frontend.
-Events are emitted via an async-safe EventStream that decouples
-middleware execution from HTTP response handling.
+Events are emitted via an async queue that feeds into the SSE response stream.
 
-This module uses contextvars for async-safe per-request stream management,
+This module uses contextvars for async-safe per-request state management,
 compatible with FastAPI's async execution model.
 """
 
+import asyncio
 import json
 import logging
 import os
 from contextvars import ContextVar
-from typing import Any, Optional, Protocol
+from typing import Any, Optional
 
 from agent_framework import agent_middleware, function_middleware
 
@@ -60,36 +60,69 @@ def get_appinsights_connection_string() -> str:
     )
 
 
-class EventStreamProtocol(Protocol):
-    """Protocol for event stream objects (sync or async)."""
+# Context variable for per-request event queue (async-safe)
+_current_queue: ContextVar[Optional[asyncio.Queue]] = ContextVar(
+    "current_queue", default=None
+)
 
-    def emit(self, message: str) -> None:
-        """Emit an event to the stream."""
-        ...
-
-
-# Context variable for per-request stream (async-safe, replaces threading.local)
-_current_stream: ContextVar[Optional[EventStreamProtocol]] = ContextVar(
-    "current_stream", default=None
+# Context variable for current message sequence number
+_current_message_seq: ContextVar[Optional[int]] = ContextVar(
+    "current_message_seq", default=None
 )
 
 
-def set_current_stream(stream: Optional[EventStreamProtocol]) -> None:
-    """Set the current stream for this async context.
+def set_current_queue(queue: Optional[asyncio.Queue]) -> None:
+    """Set the current event queue for this async context.
 
     Args:
-        stream: The EventStream instance (sync or async), or None to clear
+        queue: The asyncio.Queue instance, or None to clear
     """
-    _current_stream.set(stream)
+    _current_queue.set(queue)
 
 
-def get_current_stream() -> Optional[EventStreamProtocol]:
-    """Get the current stream for this async context.
+def get_current_queue() -> Optional[asyncio.Queue]:
+    """Get the current event queue for this async context.
 
     Returns:
-        The EventStream instance, or None if not set
+        The asyncio.Queue instance, or None if not set
     """
-    return _current_stream.get()
+    return _current_queue.get()
+
+
+def set_current_message_seq(seq: Optional[int]) -> None:
+    """Set the current message sequence number for this async context.
+
+    Args:
+        seq: The message sequence number, or None to clear
+    """
+    _current_message_seq.set(seq)
+
+
+def get_current_message_seq() -> Optional[int]:
+    """Get the current message sequence number for this async context.
+
+    Returns:
+        The message sequence number, or None if not set
+    """
+    return _current_message_seq.get()
+
+
+async def emit_event(event_data: dict) -> None:
+    """Emit an event to the current queue if available.
+
+    Args:
+        event_data: Dictionary containing event data (will be JSON serialized)
+    """
+    queue = get_current_queue()
+    if queue:
+        # Add sequence number to event
+        seq = get_current_message_seq()
+        if seq is not None:
+            event_data["seq"] = seq
+
+        # Format as SSE event
+        sse_event = f"event: thinking\ndata: {json.dumps(event_data)}\n\n"
+        await queue.put(sse_event)
 
 
 @agent_middleware
@@ -97,18 +130,20 @@ async def observability_agent_middleware(context, next):  # type: ignore
     """Log agent invocation and completion.
 
     Emits events when an agent starts and finishes execution.
-    Format: "[AgentName] agent invoked" and "[AgentName] agent finished"
     """
-    stream = get_current_stream()
     agent_name = context.agent.name
 
-    if stream:
-        stream.emit(f"[{agent_name}] agent invoked\n")
+    await emit_event({
+        "type": "agent_invoked",
+        "agent": agent_name,
+    })
 
     await next(context)
 
-    if stream:
-        stream.emit(f"[{agent_name}] agent finished\n")
+    await emit_event({
+        "type": "agent_finished",
+        "agent": agent_name,
+    })
 
 
 def serialize_result(result: Any) -> Any:
@@ -142,23 +177,18 @@ async def observability_function_middleware(context, next):  # type: ignore
     - function_start: Contains function name and input arguments
     - function_end: Contains function name and output result
     """
-    stream = get_current_stream()
     func_name = context.function.name
 
-    if stream:
-        event = {
-            "type": "function_start",
-            "function": func_name,
-            "arguments": context.arguments.model_dump(),
-        }
-        stream.emit(json.dumps(event))
+    await emit_event({
+        "type": "function_start",
+        "function": func_name,
+        "arguments": context.arguments.model_dump(),
+    })
 
     await next(context)
 
-    if stream:
-        event = {
-            "type": "function_end",
-            "function": func_name,
-            "result": serialize_result(context.result),
-        }
-        stream.emit(json.dumps(event))
+    await emit_event({
+        "type": "function_end",
+        "function": func_name,
+        "result": serialize_result(context.result),
+    })

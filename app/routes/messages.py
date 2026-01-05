@@ -1,27 +1,30 @@
-"""Message API routes with SSE streaming for workflow execution."""
+"""Message API routes with unified SSE streaming for workflow execution."""
 
+import asyncio
+import json
 import logging
 from datetime import datetime, timezone
-from typing import Dict
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
+from agent_framework._workflows._events import WorkflowOutputEvent
+
 from ..config import get_settings
 from ..dependencies import CurrentUserDep, HistoryManagerDep
-from ..opsagent.middleware.observability import set_current_stream
+from ..opsagent.middleware.observability import (
+    set_current_message_seq,
+    set_current_queue,
+)
 from ..opsagent.schemas.common import MessageData, WorkflowInput
 from ..opsagent.workflows.dynamic_workflow import create_dynamic_workflow
 from ..opsagent.workflows.triage_workflow import create_triage_workflow
-from ..schemas import MessageSchema, SendMessageRequest, SendMessageResponse
-from ..utils.event_stream import AsyncEventStream
+from ..schemas import SendMessageRequest
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# Store active EventStream instances keyed by conversation_id
-_active_streams: Dict[str, AsyncEventStream] = {}
 
 
 def title_from_first_user_message(msg: str) -> str:
@@ -37,116 +40,43 @@ def title_from_first_user_message(msg: str) -> str:
     return (trimmed[:28] + "…") if len(trimmed) > 29 else (trimmed if trimmed else "New chat")
 
 
-async def call_llm(model: str, messages: list[dict]) -> str:
-    """Execute the workflow with conversation history.
-
-    Uses dynamic workflow if DYNAMIC_PLAN=true, otherwise uses triage workflow.
-    Creates a fresh workflow instance per request for thread-safety.
+def format_sse_event(event_type: str, data: dict) -> str:
+    """Format data as an SSE event string.
 
     Args:
-        model: Model identifier (currently unused, workflow uses default)
-        messages: List of message dicts with "role" and "content" fields
+        event_type: The SSE event type (e.g., 'thinking', 'message', 'done')
+        data: Dictionary to JSON serialize as event data
 
     Returns:
-        Assistant response text
+        Formatted SSE event string
     """
-    settings = get_settings()
-
-    try:
-        # Create fresh workflow for this request
-        if settings.dynamic_plan:
-            # Use dynamic workflow with review loop
-            workflow = create_dynamic_workflow()
-        else:
-            # Use standard triage workflow
-            workflow = create_triage_workflow()
-
-        # Convert messages to workflow input format
-        message_data = [
-            MessageData(role=msg["role"], text=msg["content"])
-            for msg in messages
-        ]
-        input_data = WorkflowInput(messages=message_data)
-
-        # Run async workflow
-        result = await workflow.run(input_data)
-
-        # Extract output
-        outputs = result.get_outputs()
-        if outputs:
-            return outputs[0]
-        return "No response from workflow"
-
-    except Exception as e:
-        logger.error(f"Workflow execution failed: {e}")
-        return f"Error: Unable to process request. {str(e)}"
+    return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
 
 
-@router.get("/conversations/{conversation_id}/thinking")
-async def thinking_stream(conversation_id: str):
-    """SSE endpoint for streaming thinking events during workflow execution.
-
-    This endpoint should be connected BEFORE sending a message.
-    Events are pushed by middleware during workflow.run() execution.
-
-    Args:
-        conversation_id: Conversation ID
-
-    Returns:
-        StreamingResponse with Server-Sent Events
-    """
-
-    async def event_generator():
-        # Create and register stream for this conversation
-        stream = AsyncEventStream()
-        _active_streams[conversation_id] = stream
-        await stream.start()
-
-        # Send initial comment to establish connection and flush buffers
-        # This helps with Azure App Service proxy buffering
-        yield ": connected\n\n"
-
-        try:
-            # Yield events as they arrive (async blocking)
-            async for event in stream.iter_events():
-                yield f"data: {event}\n\n"
-        finally:
-            # Cleanup when stream ends or client disconnects
-            if conversation_id in _active_streams:
-                del _active_streams[conversation_id]
-
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Pragma": "no-cache",
-            "Expires": "0",
-            "X-Accel-Buffering": "no",  # Nginx
-            "X-Content-Type-Options": "nosniff",
-            "Content-Type": "text/event-stream; charset=utf-8",
-            # Azure App Service specific - disable ARR buffering
-            "X-ARR-Disable-Session-Affinity": "true",
-            "Transfer-Encoding": "chunked",
-        },
-    )
-
-
-@router.post("/conversations/{conversation_id}/messages", response_model=SendMessageResponse)
+@router.post("/conversations/{conversation_id}/messages")
 async def send_message(
     conversation_id: str,
     body: SendMessageRequest,
     history: HistoryManagerDep,
     current_user: CurrentUserDep,
-) -> SendMessageResponse:
-    """Send a message to a conversation and get LLM response.
+):
+    """Send a message and stream thinking events + final response via SSE.
+
+    This unified endpoint streams middleware events (function_start/end, agent events)
+    in real-time and returns the final assistant response as part of the same stream.
+
+    Events emitted:
+    - message (user): Confirms user message saved
+    - thinking (function_start/end, agent_invoked/finished): From middleware
+    - message (assistant): Final response from workflow
+    - done: Stream complete
 
     Args:
         conversation_id: Conversation ID
         body: SendMessageRequest with user message
 
     Returns:
-        SendMessageResponse with user message, assistant response, and title
+        StreamingResponse with SSE events
 
     Raises:
         HTTPException: 404 if conversation not found
@@ -162,6 +92,9 @@ async def send_message(
     if not convo:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
+    # Calculate message sequence number (user message index)
+    user_message_seq = len(convo["messages"])
+
     # Append user message
     now = datetime.now(timezone.utc).isoformat()
     convo["messages"].append({
@@ -174,50 +107,128 @@ async def send_message(
     if convo["title"] == "New chat":
         convo["title"] = title_from_first_user_message(user_message)
 
-    # Get the thinking stream for this conversation (if frontend connected)
-    stream = _active_streams.get(conversation_id)
+    async def event_generator():
+        """Generate SSE events from workflow execution."""
+        # Create event queue for middleware to emit to
+        event_queue: asyncio.Queue[Optional[str]] = asyncio.Queue()
+        final_output: Optional[str] = None
+        workflow_error: Optional[str] = None
 
-    # Set as current stream for middleware to use
-    set_current_stream(stream)
+        async def run_workflow():
+            """Run the workflow and emit events to the queue."""
+            nonlocal final_output, workflow_error
 
-    try:
-        # Call workflow (middleware will emit events to stream)
-        # Build OpenAI-style message list for workflow
-        llm_messages = [
-            {"role": m["role"], "content": m["content"]}
-            for m in convo["messages"]
-        ]
-        reply = await call_llm(convo["model"], llm_messages)
-    finally:
-        # Stop the stream and clear current stream
-        if stream:
-            await stream.stop()
-        set_current_stream(None)
+            settings = get_settings()
 
-    # Append assistant message
-    assistant_time = datetime.now(timezone.utc).isoformat()
-    convo["messages"].append({
-        "role": "assistant",
-        "content": reply,
-        "time": assistant_time,
-    })
+            try:
+                # Set up context for middleware
+                set_current_queue(event_queue)
+                set_current_message_seq(user_message_seq)
 
-    # Update last_modified (moves chat to top of list)
-    convo["last_modified"] = assistant_time
+                # Create fresh workflow for this request
+                if settings.dynamic_plan:
+                    workflow = create_dynamic_workflow()
+                else:
+                    workflow = create_triage_workflow()
 
-    # Save to storage (write-through: postgres first, then redis)
-    await history.save_conversation(conversation_id, user_id, convo)
+                # Convert messages to workflow input format
+                message_data = [
+                    MessageData(role=msg["role"], text=msg["content"])
+                    for msg in convo["messages"]
+                ]
+                input_data = WorkflowInput(messages=message_data)
 
-    return SendMessageResponse(
-        user_message=MessageSchema(
-            role="user",
-            content=user_message,
-            time=now,
-        ),
-        assistant_message=MessageSchema(
-            role="assistant",
-            content=reply,
-            time=assistant_time,
-        ),
-        title=convo["title"],
+                # Run workflow with streaming
+                # Middleware events (function_start/end, agent events) are emitted
+                # directly to the queue via observability middleware.
+                # We only capture WorkflowOutputEvent for the final response.
+                async for event in workflow.run_stream(input_data):
+                    if isinstance(event, WorkflowOutputEvent):
+                        final_output = event.data
+
+            except Exception as e:
+                logger.error(f"Workflow execution failed: {e}")
+                workflow_error = str(e)
+            finally:
+                # Clear context
+                set_current_queue(None)
+                set_current_message_seq(None)
+                # Signal completion
+                await event_queue.put(None)
+
+        # Start workflow in background task
+        workflow_task = asyncio.create_task(run_workflow())
+
+        # Emit user message saved event
+        yield format_sse_event("message", {
+            "type": "user",
+            "content": user_message,
+            "seq": user_message_seq,
+            "time": now,
+        })
+
+        # Yield events from queue as they arrive
+        # These are middleware events (function_start/end, agent_invoked/finished)
+        try:
+            while True:
+                event = await event_queue.get()
+                if event is None:
+                    break
+                yield event
+        except asyncio.CancelledError:
+            workflow_task.cancel()
+            raise
+
+        # Wait for workflow to complete
+        await workflow_task
+
+        # Handle result
+        if workflow_error:
+            reply = f"Error: Unable to process request. {workflow_error}"
+        elif final_output:
+            reply = final_output
+        else:
+            reply = "No response from workflow"
+
+        # Append assistant message
+        assistant_time = datetime.now(timezone.utc).isoformat()
+        convo["messages"].append({
+            "role": "assistant",
+            "content": reply,
+            "time": assistant_time,
+        })
+
+        # Update last_modified
+        convo["last_modified"] = assistant_time
+
+        # Save to storage
+        await history.save_conversation(conversation_id, user_id, convo)
+
+        # Emit assistant message
+        assistant_seq = user_message_seq + 1
+        yield format_sse_event("message", {
+            "type": "assistant",
+            "content": reply,
+            "seq": assistant_seq,
+            "time": assistant_time,
+            "title": convo["title"],
+        })
+
+        # Signal completion
+        yield format_sse_event("done", {})
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+            "X-Accel-Buffering": "no",  # Nginx
+            "X-Content-Type-Options": "nosniff",
+            "Content-Type": "text/event-stream; charset=utf-8",
+            # Azure App Service specific - disable ARR buffering
+            "X-ARR-Disable-Session-Affinity": "true",
+            "Transfer-Encoding": "chunked",
+        },
     )

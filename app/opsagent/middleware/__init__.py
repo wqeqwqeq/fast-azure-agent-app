@@ -1,19 +1,21 @@
 """Middleware for agent execution."""
 
 from .observability import (
-    EventStreamProtocol,
-    get_current_stream,
-    set_current_stream,
+    get_appinsights_connection_string,
+    get_current_message_seq,
+    get_current_queue,
     observability_agent_middleware,
     observability_function_middleware,
-    get_appinsights_connection_string,
+    set_current_message_seq,
+    set_current_queue,
 )
 
 __all__ = [
-    "EventStreamProtocol",
-    "get_current_stream",
-    "set_current_stream",
+    "get_appinsights_connection_string",
+    "get_current_message_seq",
+    "get_current_queue",
     "observability_agent_middleware",
     "observability_function_middleware",
-    "get_appinsights_connection_string",
+    "set_current_message_seq",
+    "set_current_queue",
 ]
