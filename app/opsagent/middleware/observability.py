@@ -2,16 +2,18 @@
 Observability module for agent middleware.
 
 Provides real-time streaming of agent thinking events to the frontend.
-Events are emitted via a thread-safe EventStream that decouples
+Events are emitted via an async-safe EventStream that decouples
 middleware execution from HTTP response handling.
+
+This module uses contextvars for async-safe per-request stream management,
+compatible with FastAPI's async execution model.
 """
 
 import json
 import logging
 import os
-import queue
-import threading
-from typing import Any, Optional
+from contextvars import ContextVar
+from typing import Any, Optional, Protocol
 
 from agent_framework import agent_middleware, function_middleware
 
@@ -58,59 +60,36 @@ def get_appinsights_connection_string() -> str:
     )
 
 
-class EventStream:
-    """Thread-safe event stream for middleware to push thinking events.
+class EventStreamProtocol(Protocol):
+    """Protocol for event stream objects (sync or async)."""
 
-    This class provides a bridge between async middleware (running inside
-    the workflow) and the sync Flask SSE endpoint. Events are pushed to
-    a queue and consumed by the SSE generator.
-    """
-
-    def __init__(self):
-        self._queue: queue.Queue[Optional[str]] = queue.Queue()
-        self._active = False
-
-    def start(self):
-        """Start accepting events."""
-        self._active = True
-        # Clear any old events
-        while not self._queue.empty():
-            try:
-                self._queue.get_nowait()
-            except queue.Empty:
-                break
-
-    def emit(self, message: str):
+    def emit(self, message: str) -> None:
         """Emit an event to the stream."""
-        if self._active:
-            self._queue.put(message)
-
-    def stop(self):
-        """Stop the stream and signal completion."""
-        self._active = False
-        self._queue.put(None)  # Sentinel to signal end
-
-    def iter_events(self):
-        """Iterate over events (blocking). Yields until None sentinel."""
-        while True:
-            event = self._queue.get()
-            if event is None:
-                break
-            yield event
+        ...
 
 
-# Thread-local storage for per-request stream (thread-safe for gthread/multi-thread)
-_thread_local = threading.local()
+# Context variable for per-request stream (async-safe, replaces threading.local)
+_current_stream: ContextVar[Optional[EventStreamProtocol]] = ContextVar(
+    "current_stream", default=None
+)
 
 
-def set_current_stream(stream: Optional[EventStream]):
-    """Set the current stream for this thread."""
-    _thread_local.current_stream = stream
+def set_current_stream(stream: Optional[EventStreamProtocol]) -> None:
+    """Set the current stream for this async context.
+
+    Args:
+        stream: The EventStream instance (sync or async), or None to clear
+    """
+    _current_stream.set(stream)
 
 
-def get_current_stream() -> Optional[EventStream]:
-    """Get the current stream for this thread."""
-    return getattr(_thread_local, 'current_stream', None)
+def get_current_stream() -> Optional[EventStreamProtocol]:
+    """Get the current stream for this async context.
+
+    Returns:
+        The EventStream instance, or None if not set
+    """
+    return _current_stream.get()
 
 
 @agent_middleware

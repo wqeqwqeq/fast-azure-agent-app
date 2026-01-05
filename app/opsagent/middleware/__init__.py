@@ -1,7 +1,7 @@
 """Middleware for agent execution."""
 
 from .observability import (
-    EventStream,
+    EventStreamProtocol,
     get_current_stream,
     set_current_stream,
     observability_agent_middleware,
@@ -10,7 +10,7 @@ from .observability import (
 )
 
 __all__ = [
-    "EventStream",
+    "EventStreamProtocol",
     "get_current_stream",
     "set_current_stream",
     "observability_agent_middleware",
