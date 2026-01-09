@@ -16,7 +16,7 @@ from .config import get_settings
 from .infrastructure import AsyncChatHistoryManager
 from .infrastructure.keyvault import AKV
 from .opsagent.utils.settings import initialize_azure_openai_settings
-from .routes import conversations, messages, settings, user
+from .routes import conversations, evaluation, messages, settings, user
 
 # All secrets to pre-load at startup
 REQUIRED_SECRETS = [
@@ -118,6 +118,7 @@ def create_app() -> FastAPI:
     app.include_router(settings.router, prefix="/api", tags=["settings"])
     app.include_router(conversations.router, prefix="/api", tags=["conversations"])
     app.include_router(messages.router, prefix="/api", tags=["messages"])
+    app.include_router(evaluation.router, prefix="/api", tags=["evaluation"])
 
     @app.get("/health")
     async def health_check():

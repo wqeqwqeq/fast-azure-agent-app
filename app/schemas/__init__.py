@@ -7,6 +7,7 @@ from .conversation import (
     ConversationUpdate,
     MessageSchema,
 )
+from .evaluation import EvaluationResponse, EvaluationUpdate
 from .events import (
     AgentFinishedEvent,
     AgentInvokedEvent,
@@ -27,6 +28,9 @@ __all__ = [
     # Message schemas
     "SendMessageRequest",
     "SendMessageResponse",
+    # Evaluation schemas
+    "EvaluationUpdate",
+    "EvaluationResponse",
     # User schemas
     "UserInfo",
     # Settings schemas

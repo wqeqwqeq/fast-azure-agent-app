@@ -50,6 +50,8 @@ CREATE TABLE IF NOT EXISTS messages (
     role VARCHAR(20) NOT NULL CHECK (role IN ('user', 'assistant')),
     content TEXT NOT NULL,
     timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    is_satisfy BOOLEAN DEFAULT NULL,
+    comment TEXT DEFAULT NULL,
 
     -- Ensure unique sequence numbers within each conversation
     CONSTRAINT unique_conversation_sequence UNIQUE (conversation_id, sequence_number)

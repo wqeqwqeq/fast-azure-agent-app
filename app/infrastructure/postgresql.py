@@ -247,3 +247,69 @@ class AsyncPostgreSQLBackend:
                 conversation_id,
                 user_id,
             )
+
+    async def set_message_evaluation(
+        self,
+        conversation_id: str,
+        sequence_number: int,
+        is_satisfy: bool,
+        comment: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Set message evaluation (thumb up/down).
+
+        Args:
+            conversation_id: Conversation ID
+            sequence_number: Message sequence number
+            is_satisfy: True for thumb up, False for thumb down
+            comment: Optional feedback comment
+
+        Returns:
+            Updated evaluation info, or None if message not found
+        """
+        if not self.pool:
+            raise RuntimeError("PostgreSQL pool not initialized")
+
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                UPDATE messages
+                SET is_satisfy = $1, comment = $2
+                WHERE conversation_id = $3 AND sequence_number = $4
+                RETURNING conversation_id, sequence_number, is_satisfy, comment
+                """,
+                is_satisfy,
+                comment,
+                conversation_id,
+                sequence_number,
+            )
+            return dict(row) if row else None
+
+    async def clear_message_evaluation(
+        self,
+        conversation_id: str,
+        sequence_number: int,
+    ) -> Optional[Dict[str, Any]]:
+        """Clear message evaluation (set is_satisfy and comment to NULL).
+
+        Args:
+            conversation_id: Conversation ID
+            sequence_number: Message sequence number
+
+        Returns:
+            Updated evaluation info, or None if message not found
+        """
+        if not self.pool:
+            raise RuntimeError("PostgreSQL pool not initialized")
+
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                UPDATE messages
+                SET is_satisfy = NULL, comment = NULL
+                WHERE conversation_id = $1 AND sequence_number = $2
+                RETURNING conversation_id, sequence_number, is_satisfy, comment
+                """,
+                conversation_id,
+                sequence_number,
+            )
+            return dict(row) if row else None
