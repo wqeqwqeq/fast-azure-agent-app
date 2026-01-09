@@ -8,7 +8,7 @@ from typing import Annotated, Any, Dict
 from fastapi import Depends, Header, Request
 
 from .config import Settings, get_settings
-from .db import AsyncChatHistoryManager
+from .infrastructure import AsyncChatHistoryManager
 from .schemas import UserInfo
 
 logger = logging.getLogger(__name__)

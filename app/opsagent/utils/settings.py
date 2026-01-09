@@ -1,46 +1,62 @@
+"""Azure OpenAI settings configuration."""
+
 import os
 from typing import Optional
-from pydantic_settings import BaseSettings, SettingsConfigDict
+
 from dotenv import load_dotenv
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 load_dotenv()
 
 # Singleton cache
 _settings_instance: Optional["AzureOpenAISettings"] = None
 
 
-def get_azure_openai_settings() -> "AzureOpenAISettings":
-    """Get cached AzureOpenAISettings instance (singleton)."""
-    global _settings_instance
-    if _settings_instance is None:
-        _settings_instance = AzureOpenAISettings()
-    return _settings_instance
-
-
 class AzureOpenAISettings(BaseSettings):
-    """Azure OpenAI configuration with Key Vault support."""
+    """Azure OpenAI configuration.
+
+    API key should be provided via:
+    1. Environment variable AZURE_OPENAI_API_KEY
+    2. Calling initialize_azure_openai_settings() with pre-loaded secret from Key Vault
+    """
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    azure_openai_api_key: str = ""  # Allow empty, will be loaded from Key Vault
+    azure_openai_api_key: str = ""
     azure_openai_endpoint: str = "https://stanleyai.cognitiveservices.azure.com/"
-    azure_openai_deployment_name: str
+    azure_openai_deployment_name: str = ""
 
-    def __init__(self, **data):
-        super().__init__(**data)
-        if not self.azure_openai_api_key:
-            self._load_from_keyvault()
 
-    def _load_from_keyvault(self):
-        """Load azure_openai_api_key from Key Vault using RESOURCE_PREFIX."""
-        resource_prefix = os.getenv("RESOURCE_PREFIX")
-        if resource_prefix:
-            vault_name = f"{resource_prefix.replace('-', '')}kv"
-            from .keyvault import AKV
-            akv = AKV(vault_name)
-            secret_value = akv.get_secret("AZURE-OPENAI-API-KEY")
-            if secret_value:
-                object.__setattr__(self, "azure_openai_api_key", secret_value)
-            else:
-                raise ValueError(f"Failed to load AZURE_OPENAI_API_KEY from {vault_name}")
-        else:
-            raise ValueError("AZURE_OPENAI_API_KEY not set and RESOURCE_PREFIX not configured")
+def initialize_azure_openai_settings(api_key: str) -> "AzureOpenAISettings":
+    """Initialize AzureOpenAISettings singleton with the provided API key.
+
+    Call this from lifespan after loading secrets from Key Vault.
+
+    Args:
+        api_key: Azure OpenAI API key from Key Vault
+
+    Returns:
+        Initialized AzureOpenAISettings instance
+    """
+    global _settings_instance
+    _settings_instance = AzureOpenAISettings(azure_openai_api_key=api_key)
+    return _settings_instance
+
+
+def get_azure_openai_settings() -> "AzureOpenAISettings":
+    """Get cached AzureOpenAISettings instance (singleton).
+
+    Raises:
+        RuntimeError: If settings not initialized and no env var set
+    """
+    global _settings_instance
+    if _settings_instance is None:
+        # Try to create from env var
+        _settings_instance = AzureOpenAISettings()
+        if not _settings_instance.azure_openai_api_key:
+            raise RuntimeError(
+                "AzureOpenAISettings not initialized. "
+                "Either set AZURE_OPENAI_API_KEY env var or call "
+                "initialize_azure_openai_settings() from lifespan."
+            )
+    return _settings_instance

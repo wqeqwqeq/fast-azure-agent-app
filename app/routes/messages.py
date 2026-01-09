@@ -13,10 +13,7 @@ from agent_framework._workflows._events import WorkflowOutputEvent
 
 from ..config import get_settings
 from ..dependencies import CurrentUserDep, HistoryManagerDep
-from ..opsagent.middleware.observability import (
-    set_current_message_seq,
-    set_current_queue,
-)
+from ..core.events import set_current_message_seq, set_current_queue
 from ..opsagent.schemas.common import MessageData, WorkflowInput
 from ..opsagent.workflows.dynamic_workflow import create_dynamic_workflow
 from ..opsagent.workflows.triage_workflow import create_triage_workflow

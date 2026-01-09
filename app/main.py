@@ -13,9 +13,18 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
-from .db import AsyncChatHistoryManager
-from .opsagent.utils.keyvault import AKV
+from .infrastructure import AsyncChatHistoryManager
+from .infrastructure.keyvault import AKV
+from .opsagent.utils.settings import initialize_azure_openai_settings
 from .routes import conversations, messages, settings, user
+
+# All secrets to pre-load at startup
+REQUIRED_SECRETS = [
+    "POSTGRES-ADMIN-PASSWORD",
+    "REDIS-PASSWORD",
+    "AZURE-OPENAI-API-KEY",
+    "APPLICATIONINSIGHTS-CONNECTION-STRING",
+]
 
 # Configure logging
 logging.basicConfig(
@@ -35,11 +44,16 @@ async def lifespan(app: FastAPI):
     app_settings = get_settings()
     logger.info(f"Starting application with mode: {app_settings.chat_history_mode}")
 
-    # Initialize Key Vault client for secrets
+    # Initialize Key Vault client and pre-load all secrets
     akv = AKV(vault_name=app_settings.key_vault_name)
+    akv.load_secrets(REQUIRED_SECRETS)
+    app.state.keyvault = akv
 
-    # Get database credentials from Key Vault
-    postgres_password = akv.get_secret("POSTGRES-ADMIN-PASSWORD") or ""
+    # Initialize Azure OpenAI settings with pre-loaded API key
+    initialize_azure_openai_settings(akv.get_secret("AZURE-OPENAI-API-KEY"))
+
+    # Get database credentials from pre-loaded secrets
+    postgres_password = akv.get_secret("POSTGRES-ADMIN-PASSWORD")
     postgres_connection_string = app_settings.get_postgres_connection_string(postgres_password)
 
     # Initialize history manager
@@ -51,7 +65,7 @@ async def lifespan(app: FastAPI):
     use_redis = app_settings.chat_history_mode in ["redis", "local_redis"]
 
     if use_redis:
-        redis_password = akv.get_secret("REDIS-PASSWORD") or ""
+        redis_password = akv.get_secret("REDIS-PASSWORD")
         await history_manager.initialize(
             postgres_connection_string=postgres_connection_string,
             redis_host=app_settings.redis_host,
