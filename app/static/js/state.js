@@ -4,7 +4,7 @@
 
 let conversations = [];
 let currentConversationId = null;
-let selectedModel = 'gpt-4o-mini';
+let selectedModel = 'gpt-4.1-mini';
 let userInfo = null;
 let openDropdown = null;  // Track which dropdown is open
 

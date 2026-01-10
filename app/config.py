@@ -43,14 +43,12 @@ class Settings(BaseSettings):
     show_func_result: bool = True
 
     # Default model
-    default_model: str = "gpt-4o-mini"
+    default_model: str = "gpt-4.1-mini"
 
     # Available models
     available_models: list[str] = [
-        "gpt-4o-mini",
-        "gpt-4o",
         "gpt-4.1",
-        "gpt-3.5-turbo",
+        "gpt-4.1-mini",
     ]
 
     # Local testing credentials (for local_psql/local_redis modes)

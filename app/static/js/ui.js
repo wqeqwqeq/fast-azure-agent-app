@@ -242,17 +242,13 @@ function renderModelSelector() {
     const modelVersion = document.getElementById('current-model-version');
 
     // Update display
-    modelDisplay.textContent = 'ChatGPT';
-    if (selectedModel === 'gpt-4o-mini') {
-        modelVersion.textContent = '4o-mini';
-    } else if (selectedModel === 'gpt-4o') {
-        modelVersion.textContent = '4o';
-    } else if (selectedModel === 'gpt-4.1') {
+    modelDisplay.textContent = 'GPT';
+    if (selectedModel === 'gpt-4.1') {
         modelVersion.textContent = '4.1';
-    } else if (selectedModel === 'gpt-3.5-turbo') {
-        modelVersion.textContent = '3.5';
+    } else if (selectedModel === 'gpt-4.1-mini') {
+        modelVersion.textContent = '4.1-mini';
     } else {
-        modelVersion.textContent = selectedModel;
+        modelVersion.textContent = selectedModel.replace('gpt-', '');
     }
 
     // Render model options
