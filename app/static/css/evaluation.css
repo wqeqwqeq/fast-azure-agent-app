@@ -1,0 +1,156 @@
+/* --- Evaluation Buttons --- */
+/* Always visible below each assistant message */
+.evaluation-buttons {
+    display: flex;
+    gap: 4px;
+    margin-top: 12px;
+    padding-top: 8px;
+}
+
+.eval-btn {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    padding: 6px 8px;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.eval-btn:hover {
+    background-color: var(--hover-bg);
+    border-color: var(--text-secondary);
+}
+
+/* Active/Selected states */
+.eval-btn.active.thumbs-up {
+    color: #10a37f;
+    background-color: rgba(16, 163, 127, 0.1);
+    border-color: #10a37f;
+}
+
+.eval-btn.active.thumbs-down {
+    color: #ef4444;
+    background-color: rgba(239, 68, 68, 0.1);
+    border-color: #ef4444;
+}
+
+.eval-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* --- Feedback Popup --- */
+.feedback-popup-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: fadeIn 0.15s ease-out;
+}
+
+.feedback-popup {
+    background: white;
+    border-radius: 16px;
+    padding: 20px;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    animation: slideUp 0.2s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.feedback-popup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--text-primary);
+}
+
+.feedback-popup-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 0;
+    line-height: 1;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.feedback-popup-close:hover {
+    background-color: var(--hover-bg);
+    color: var(--text-primary);
+}
+
+.feedback-textarea {
+    width: 100%;
+    min-height: 100px;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    font-family: inherit;
+    font-size: 0.95rem;
+    resize: vertical;
+    margin-bottom: 16px;
+    color: var(--text-primary);
+    box-sizing: border-box;
+}
+
+.feedback-textarea::placeholder {
+    color: var(--text-secondary);
+}
+
+.feedback-textarea:focus {
+    outline: none;
+    border-color: #10a37f;
+}
+
+.feedback-submit-btn {
+    width: 100%;
+    padding: 12px;
+    background-color: #10a37f;
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.feedback-submit-btn:hover {
+    background-color: #0d8a6a;
+}
+
+.feedback-submit-btn:active {
+    background-color: #0b7a5e;
+}

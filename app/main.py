@@ -4,13 +4,17 @@ This module provides the main FastAPI application with:
 - Lifespan management for database connections
 - CORS middleware
 - Route registration
+- Static file serving for frontend UI
 """
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from .config import get_settings
 from .infrastructure import AsyncChatHistoryManager
@@ -113,6 +117,11 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Serve static files
+    static_dir = Path(__file__).parent / "static"
+    if static_dir.exists():
+        app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
     # Include routers
     app.include_router(user.router, prefix="/api", tags=["user"])
     app.include_router(settings.router, prefix="/api", tags=["settings"])
@@ -124,6 +133,12 @@ def create_app() -> FastAPI:
     async def health_check():
         """Health check endpoint."""
         return {"status": "healthy"}
+
+    @app.get("/")
+    async def root():
+        """Serve the frontend UI."""
+        static_dir = Path(__file__).parent / "static"
+        return FileResponse(static_dir / "index.html")
 
     return app
 

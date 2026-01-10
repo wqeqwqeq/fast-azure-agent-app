@@ -1,0 +1,68 @@
+/* --- Reset & Base Styles --- */
+:root {
+    /* Theme Colors based on reference */
+    --sidebar-width-expanded: 260px;
+    --sidebar-width-collapsed: 60px;
+    --sidebar-bg: #f9f9f9;
+    --main-bg: #ffffff;
+    --text-primary: #0d0d0d;
+    --text-secondary: #676767;
+    --hover-bg: #ececec;
+    --border-color: #e5e5e5;
+
+    /* Message Bubble Colors */
+    --user-msg-bg: #f4f4f4;
+    --user-msg-text: #0d0d0d;
+
+    /* Fonts from reference */
+    --font-family: ui-sans-serif, -apple-system, system-ui, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol";
+
+    --transition-speed: 0.3s;
+    --header-height: 60px;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    outline: none;
+}
+
+body {
+    font-family: var(--font-family);
+    height: 100vh;
+    display: flex;
+    overflow: hidden;
+    color: var(--text-primary);
+    background-color: var(--main-bg);
+    font-size: 1rem;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+button {
+    font-family: inherit;
+}
+
+/* --- Icons --- */
+.icon {
+    width: 24px;
+    height: 24px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    flex-shrink: 0;
+    display: block;
+}
+
+.icon-sm {
+    width: 16px;
+    height: 16px;
+}
+
+.icon-xs {
+    width: 12px;
+    height: 12px;
+}

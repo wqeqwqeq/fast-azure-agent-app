@@ -1,0 +1,190 @@
+/* --- Main Area --- */
+.main-area {
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+    position: relative;
+    transition: margin-left 0.3s;
+    background-color: var(--main-bg);
+    overflow: hidden;
+}
+
+/* Main content wrapper (contains top-bar and chat-canvas) */
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    position: relative;
+}
+
+/* Top Bar */
+.top-bar {
+    padding: 10px 16px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: transparent;
+    height: var(--header-height);
+}
+
+.main-toggle-btn {
+    display: none;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 8px;
+    color: var(--text-secondary);
+}
+
+.main-toggle-btn:hover {
+    background-color: var(--hover-bg);
+    color: var(--text-primary);
+}
+
+/* Model Selector */
+.model-selector-container {
+    position: relative;
+    display: inline-block;
+}
+
+.model-trigger {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #202123;
+    cursor: pointer;
+    padding: 10px 16px;
+    border-radius: 12px;
+    background-color: transparent;
+    transition: background 0.2s;
+    border: none;
+}
+
+.model-trigger:hover,
+.model-selector-container.open .model-trigger {
+    background-color: #f4f4f4;
+}
+
+.model-trigger .version {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.model-menu {
+    display: none;
+    position: absolute;
+    top: 120%;
+    left: 0;
+    width: 220px;
+    background: white;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 16px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    padding: 8px;
+    z-index: 1000;
+    animation: fadeIn 0.1s ease-out;
+}
+
+.model-selector-container.open .model-menu {
+    display: block;
+}
+
+.model-option {
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    font-size: 0.95rem;
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+}
+
+.model-option:hover {
+    background-color: var(--hover-bg);
+}
+
+/* --- Chat Canvas --- */
+.chat-canvas {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    scroll-behavior: smooth;
+    scrollbar-width: thin;
+    scrollbar-color: #888 #f1f1f1;
+}
+
+.chat-canvas.welcome {
+    align-items: center;
+    justify-content: center;
+}
+
+.chat-content-wrapper {
+    width: 100%;
+    max-width: 56rem;
+    margin: 0 auto;
+    padding: 0 1rem;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.welcome-text {
+    font-weight: 600;
+    margin-bottom: 20px;
+    color: var(--text-primary);
+    text-align: center;
+}
+
+.welcome-title {
+    font-size: 2.5rem;
+}
+
+.welcome-subtitle {
+    font-size: 1.25rem;
+    font-weight: 500;
+}
+
+/* Custom scrollbar for chat-canvas */
+.chat-canvas::-webkit-scrollbar {
+    width: 12px;
+}
+
+.chat-canvas::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+.chat-canvas::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 10px;
+}
+
+.chat-canvas::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Empty state */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #666;
+}
+
+.empty-state .subtitle {
+    font-size: 0.9rem;
+    color: #999;
+}

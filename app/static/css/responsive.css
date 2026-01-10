@@ -1,0 +1,71 @@
+/* --- Responsive Styles --- */
+
+/* Responsive: hide flyout on very small screens */
+@media (max-width: 600px) {
+    .thinking-flyout {
+        width: 100%;
+        border-left: none;
+        border-top: 1px solid var(--border-color);
+    }
+
+    .main-area.flyout-open {
+        flex-direction: column;
+    }
+
+    .main-area.flyout-open .thinking-flyout {
+        height: 40vh;
+        max-height: 300px;
+    }
+
+    .feedback-popup {
+        width: 95%;
+        max-width: none;
+        margin: 0 10px;
+    }
+}
+
+@media (max-width: 768px) {
+    .messages-container {
+        padding-top: 70px;
+    }
+
+    .welcome-title {
+        font-size: 2rem;
+    }
+
+    .welcome-subtitle {
+        font-size: 1rem;
+    }
+
+    .message.user .message-content {
+        max-width: 85%;
+    }
+}
+
+@media (max-width: 480px) {
+    .input-wrapper {
+        padding: 0 0.5rem 1.5rem 0.5rem;
+    }
+
+    .messages-container {
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+
+    .welcome-title {
+        font-size: 1.75rem;
+    }
+
+    .model-trigger {
+        font-size: 1rem;
+        padding: 8px 12px;
+    }
+
+    .evaluation-buttons {
+        gap: 8px;
+    }
+
+    .eval-btn {
+        padding: 8px 10px;
+    }
+}
