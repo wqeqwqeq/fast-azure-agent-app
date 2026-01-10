@@ -13,9 +13,11 @@ function renderEvaluationButtons(seq) {
     const evaluation = messageEvaluations[key];
     const thumbsUpActive = evaluation?.is_satisfy === true ? 'active' : '';
     const thumbsDownActive = evaluation?.is_satisfy === false ? 'active' : '';
+    const containerClass = evaluation?.is_satisfy === true ? 'thumbs-up-active' :
+                          evaluation?.is_satisfy === false ? 'thumbs-down-active' : '';
 
     return `
-        <div class="evaluation-buttons" data-seq="${seq}">
+        <div class="evaluation-buttons ${containerClass}" data-seq="${seq}">
             <button class="eval-btn thumbs-up ${thumbsUpActive}" data-seq="${seq}" title="Good response">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
@@ -85,13 +87,17 @@ function updateEvaluationButtonState(seq) {
     const thumbsUp = container.querySelector('.thumbs-up');
     const thumbsDown = container.querySelector('.thumbs-down');
 
+    // Clear all states
     thumbsUp.classList.remove('active');
     thumbsDown.classList.remove('active');
+    container.classList.remove('thumbs-up-active', 'thumbs-down-active');
 
     if (evaluation?.is_satisfy === true) {
         thumbsUp.classList.add('active');
+        container.classList.add('thumbs-up-active');
     } else if (evaluation?.is_satisfy === false) {
         thumbsDown.classList.add('active');
+        container.classList.add('thumbs-down-active');
     }
 }
 

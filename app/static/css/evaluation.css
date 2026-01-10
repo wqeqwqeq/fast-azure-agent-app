@@ -2,45 +2,61 @@
 /* Always visible below each assistant message */
 .evaluation-buttons {
     display: flex;
-    gap: 4px;
+    gap: 2px;
     margin-top: 12px;
     padding-top: 8px;
 }
 
 .eval-btn {
     background: transparent;
-    border: 1px solid var(--border-color);
+    border: none;
     cursor: pointer;
-    padding: 6px 8px;
-    border-radius: 6px;
-    color: var(--text-secondary);
+    padding: 8px;
+    border-radius: 8px;
+    color: #9ca3af;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+    transition: background-color 0.2s, color 0.2s, opacity 0.2s, width 0.2s, padding 0.2s;
+    overflow: hidden;
 }
 
 .eval-btn:hover {
-    background-color: var(--hover-bg);
-    border-color: var(--text-secondary);
+    background-color: #f3f4f6;
+    color: #6b7280;
 }
 
 /* Active/Selected states */
+.eval-btn.active {
+    background-color: #f3f4f6;
+}
+
 .eval-btn.active.thumbs-up {
-    color: #10a37f;
-    background-color: rgba(16, 163, 127, 0.1);
-    border-color: #10a37f;
+    color: #f59e0b;
 }
 
 .eval-btn.active.thumbs-down {
-    color: #ef4444;
-    background-color: rgba(239, 68, 68, 0.1);
-    border-color: #ef4444;
+    color: #6b7280;
+}
+
+/* Filled icon style when active */
+.eval-btn.active svg {
+    fill: currentColor;
+    stroke: currentColor;
+}
+
+/* Hide opposite button when one is active */
+.evaluation-buttons.thumbs-up-active .thumbs-down,
+.evaluation-buttons.thumbs-down-active .thumbs-up {
+    opacity: 0;
+    width: 0;
+    padding: 0;
+    pointer-events: none;
 }
 
 .eval-btn svg {
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
 }
 
 /* --- Feedback Popup --- */
