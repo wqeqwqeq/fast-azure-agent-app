@@ -79,10 +79,7 @@ async def send_message(
         HTTPException: 404 if conversation not found
     """
     user_id = current_user.user_id
-    user_message = body.message.strip()
-
-    if not user_message:
-        raise HTTPException(status_code=400, detail="Message cannot be empty")
+    user_message = body.message  # Already stripped by Pydantic validator
 
     # Get conversation
     convo = await history.get_conversation(conversation_id, user_id)

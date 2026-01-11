@@ -1,8 +1,6 @@
 """Pydantic schemas for message-related API endpoints."""
 
-from pydantic import BaseModel, Field
-
-from .conversation import MessageSchema
+from pydantic import BaseModel, Field, field_validator
 
 
 class SendMessageRequest(BaseModel):
@@ -10,10 +8,10 @@ class SendMessageRequest(BaseModel):
 
     message: str = Field(..., min_length=1, description="User message content")
 
+    @field_validator("message", mode="before")
+    @classmethod
+    def strip_message(cls, v: str) -> str:
+        """Strip whitespace before validation."""
+        return v.strip() if isinstance(v, str) else v
 
-class SendMessageResponse(BaseModel):
-    """Schema for the response after sending a message."""
 
-    user_message: MessageSchema = Field(..., description="The user's message")
-    assistant_message: MessageSchema = Field(..., description="The assistant's response")
-    title: str = Field(..., description="Conversation title (may be auto-generated)")

@@ -37,9 +37,3 @@ class ConversationResponse(BaseModel):
     last_modified: str = Field(..., description="ISO8601 last modification timestamp")
 
 
-class ConversationListResponse(BaseModel):
-    """Schema for listing conversations."""
-
-    conversations: List[ConversationResponse] = Field(
-        default_factory=list, description="List of conversations"
-    )
