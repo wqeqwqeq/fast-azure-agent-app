@@ -10,7 +10,14 @@ from .agents import (
     create_triage_agent,
     create_user_mode_triage_agent,
 )
-from .settings import ModelConfig, ResolvedModelConfig
+from .model_registry import (
+    AVAILABLE_MODELS,
+    AgentModelMapping,
+    ModelDefinition,
+    ModelName,
+    ModelRegistry,
+    ResolvedModelConfig,
+)
 
 __all__ = [
     # Agent factories
@@ -23,6 +30,10 @@ __all__ = [
     "create_triage_agent",
     "create_user_mode_triage_agent",
     # Model configuration
-    "ModelConfig",
+    "AVAILABLE_MODELS",
+    "AgentModelMapping",
+    "ModelDefinition",
+    "ModelName",
+    "ModelRegistry",
     "ResolvedModelConfig",
 ]

@@ -9,11 +9,11 @@ from dataclasses import dataclass
 from typing import Optional
 
 from ..factory import create_agent
+from ..model_registry import ModelRegistry
 from ..schemas.dynamic_triage import (
     DynamicTriageReviewModeOutput,
     DynamicTriageUserModeOutput,
 )
-from ..settings import ModelConfig
 
 
 @dataclass(frozen=True)
@@ -22,9 +22,6 @@ class DynamicTriageAgentConfig:
 
     name: str = "dynamic-triage-agent"
     description: str = "Dynamic triage agent that plans multi-step agent execution with support for user and review modes"
-    deployment_name: str = ""
-    api_key: str = ""
-    endpoint: str = ""
     instructions: str = """You are a dynamic triage agent that plans multi-step agent execution based on user queries or review feedback.
 
 ## Your Modes
@@ -114,29 +111,41 @@ For Review Mode:
 CONFIG = DynamicTriageAgentConfig()
 
 
-def create_user_mode_triage_agent(model_config: Optional[ModelConfig] = None):
-    """Create triage agent for user mode with DynamicTriageUserModeOutput response format."""
+def create_user_mode_triage_agent(
+    registry: Optional[ModelRegistry] = None,
+    model_name: Optional[str] = None,
+):
+    """Create triage agent for user mode with DynamicTriageUserModeOutput response format.
+
+    Args:
+        registry: ModelRegistry for cloud mode, None for env settings
+        model_name: Model to use (only when registry provided)
+    """
     return create_agent(
         name=f"{CONFIG.name}-user-mode",
         description=CONFIG.description,
         instructions=CONFIG.instructions,
-        model_config=model_config,
+        registry=registry,
+        model_name=model_name,
         response_format=DynamicTriageUserModeOutput,
-        deployment_name=CONFIG.deployment_name,
-        api_key=CONFIG.api_key,
-        endpoint=CONFIG.endpoint,
     )
 
 
-def create_review_mode_triage_agent(model_config: Optional[ModelConfig] = None):
-    """Create triage agent for review mode with DynamicTriageReviewModeOutput response format."""
+def create_review_mode_triage_agent(
+    registry: Optional[ModelRegistry] = None,
+    model_name: Optional[str] = None,
+):
+    """Create triage agent for review mode with DynamicTriageReviewModeOutput response format.
+
+    Args:
+        registry: ModelRegistry for cloud mode, None for env settings
+        model_name: Model to use (only when registry provided)
+    """
     return create_agent(
         name=f"{CONFIG.name}-review-mode",
         description=CONFIG.description,
         instructions=CONFIG.instructions,
-        model_config=model_config,
+        registry=registry,
+        model_name=model_name,
         response_format=DynamicTriageReviewModeOutput,
-        deployment_name=CONFIG.deployment_name,
-        api_key=CONFIG.api_key,
-        endpoint=CONFIG.endpoint,
     )

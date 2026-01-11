@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from ..factory import create_agent
-from ..settings import ModelConfig
+from ..model_registry import ModelRegistry
 from ..tools.servicenow_tools import (
     get_change_request,
     get_incident,
@@ -19,9 +19,6 @@ class ServiceNowAgentConfig:
 
     name: str = "servicenow-agent"
     description: str = "Handles ServiceNow operations: change requests and incidents"
-    deployment_name: str = ""
-    api_key: str = ""
-    endpoint: str = ""
     instructions: str = """You are a ServiceNow ITSM assistant. You help users with:
 - Change Request management (CHG tickets)
 - Incident management (INC tickets)
@@ -45,15 +42,21 @@ Always format your response in Markdown:
 CONFIG = ServiceNowAgentConfig()
 
 
-def create_servicenow_agent(model_config: Optional[ModelConfig] = None):
-    """Create and return the ServiceNow agent."""
+def create_servicenow_agent(
+    registry: Optional[ModelRegistry] = None,
+    model_name: Optional[str] = None,
+):
+    """Create and return the ServiceNow agent.
+
+    Args:
+        registry: ModelRegistry for cloud mode, None for env settings
+        model_name: Model to use (only when registry provided)
+    """
     return create_agent(
         name=CONFIG.name,
         description=CONFIG.description,
         instructions=CONFIG.instructions,
-        model_config=model_config,
+        registry=registry,
+        model_name=model_name,
         tools=[list_change_requests, get_change_request, list_incidents, get_incident],
-        deployment_name=CONFIG.deployment_name,
-        api_key=CONFIG.api_key,
-        endpoint=CONFIG.endpoint,
     )

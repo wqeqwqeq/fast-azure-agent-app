@@ -1,6 +1,7 @@
-"""通用 Agent 工厂函数.
+"""Agent factory supporting both env settings and registry modes.
 
-提供统一的 ChatAgent 创建逻辑，减少各 agent 文件的重复代码。
+Mode 1 (registry=None): Use env settings (AzOpenAIEnvSettings) for local dev
+Mode 2/3 (registry provided): Use ModelRegistry for cloud deployment
 """
 
 from typing import Any, List, Optional, Type
@@ -12,56 +13,56 @@ from .middleware.observability import (
     observability_agent_middleware,
     observability_function_middleware,
 )
-from .settings import ModelConfig, resolve_model_config
+from .model_registry import AzOpenAIEnvSettings, ModelName, ModelRegistry
 
 
 def create_agent(
     name: str,
     description: str,
     instructions: str,
-    model_config: Optional[ModelConfig] = None,
+    registry: Optional[ModelRegistry] = None,
+    model_name: Optional[ModelName] = None,
     response_format: Optional[Type] = None,
     tools: Optional[List] = None,
-    # Agent 级别的模型配置 (优先级最高)
-    deployment_name: str = "",
-    api_key: str = "",
-    endpoint: str = "",
 ) -> ChatAgent:
-    """创建 ChatAgent 的通用工厂函数.
+    """Create ChatAgent with model configuration.
 
     Args:
-        name: Agent 名称
-        description: Agent 描述
+        name: Agent name
+        description: Agent description
         instructions: System prompt
-        model_config: 可选的模型配置覆盖 (优先级: 中)
-        response_format: 可选的 Pydantic 输出 schema (用于无 tools 的 agent)
-        tools: 可选的 tool 函数列表
-        deployment_name: Agent 级别的 deployment 配置 (优先级: 最高)
-        api_key: Agent 级别的 API key 配置 (优先级: 最高)
-        endpoint: Agent 级别的 endpoint 配置 (优先级: 最高)
+        registry: ModelRegistry for cloud mode, None for env settings
+        model_name: Model to use (required when registry provided)
+        response_format: Optional Pydantic output schema
+        tools: Optional list of tool functions
 
     Returns:
-        配置好的 ChatAgent 实例
+        Configured ChatAgent instance
 
-    Model Config Priority (highest to lowest):
-        1. Agent config (deployment_name, api_key, endpoint)
-        2. Injected ModelConfig
-        3. Environment settings
+    Raises:
+        ValueError: If registry is provided but model_name is None
     """
-    resolved = resolve_model_config(
-        model_config=model_config,
-        agent_config_deployment=deployment_name,
-        agent_config_api_key=api_key,
-        agent_config_endpoint=endpoint,
-    )
+    if registry is None:
+        # Mode 1: env settings for local dev
+        env = AzOpenAIEnvSettings()
+        api_key = env.azure_openai_api_key
+        endpoint = env.azure_openai_endpoint
+        deployment_name = env.azure_openai_deployment_name
+    else:
+        # Mode 2/3: registry (model_name required)
+        if model_name is None:
+            raise ValueError("model_name is required when registry is provided")
+        resolved = registry.get(model_name)
+        api_key = resolved.api_key
+        endpoint = resolved.endpoint
+        deployment_name = resolved.deployment_name
 
     chat_client = AzureOpenAIChatClient(
-        api_key=resolved.api_key,
-        endpoint=resolved.endpoint,
-        deployment_name=resolved.deployment_name,
+        api_key=api_key,
+        endpoint=endpoint,
+        deployment_name=deployment_name,
     )
 
-    # 有 tools 的 agent 需要额外的 function middleware
     middleware: List[Any] = [observability_agent_middleware]
     if tools:
         middleware.append(observability_function_middleware)

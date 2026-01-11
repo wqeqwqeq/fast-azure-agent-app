@@ -15,7 +15,6 @@ from ..config import get_settings
 from ..dependencies import CurrentUserDep, HistoryManagerDep
 from ..core.events import set_current_message_seq, set_current_queue
 from ..opsagent.schemas.common import MessageData, WorkflowInput
-from ..opsagent.settings import ModelConfig
 from ..opsagent.workflows.dynamic_workflow import create_dynamic_workflow
 from ..opsagent.workflows.triage_workflow import create_triage_workflow
 from ..schemas import SendMessageRequest
@@ -121,16 +120,19 @@ async def send_message(
                 set_current_queue(event_queue)
                 set_current_message_seq(user_message_seq)
 
-                # Create model config with API key from app state
-                model_config = ModelConfig(
-                    api_key=request.app.state.azure_openai_api_key
-                )
+                # Get model registry from app state
+                registry = request.app.state.model_registry
+
+                # TODO: Parse workflow_model and agent_mapping from request body
+                # workflow_model = getattr(body, 'workflow_model', None) or "gpt-4.1"
+                # agent_mapping = getattr(body, 'agent_mapping', None)
+                workflow_model = "gpt-4.1"
 
                 # Create fresh workflow for this request
                 if settings.dynamic_plan:
-                    workflow = create_dynamic_workflow(model_config)
+                    workflow = create_dynamic_workflow(registry, workflow_model)
                 else:
-                    workflow = create_triage_workflow(model_config)
+                    workflow = create_triage_workflow(registry, workflow_model)
 
                 # Convert messages to workflow input format
                 message_data = [

@@ -24,15 +24,24 @@ from agent_framework import (
 )
 from typing_extensions import Never
 
-from ..schemas.common import MessageData, WorkflowInput
+from ..agents.clarify_agent import create_clarify_agent
+from ..agents.dynamic_triage_agent import (
+    create_review_mode_triage_agent,
+    create_user_mode_triage_agent,
+)
+from ..agents.log_analytics_agent import create_log_analytics_agent
+from ..agents.review_agent import create_review_agent
+from ..agents.service_health_agent import create_service_health_agent
+from ..agents.servicenow_agent import create_servicenow_agent
+from ..model_registry import AgentModelMapping, ModelName, ModelRegistry, create_model_resolver
+from ..schemas.clarify import ClarifyOutput
+from ..schemas.common import WorkflowInput
 from ..schemas.dynamic_triage import (
     DynamicTriagePlanStep,
-    DynamicTriageUserModeOutput,
     DynamicTriageReviewModeOutput,
+    DynamicTriageUserModeOutput,
 )
 from ..schemas.review import ReviewOutput
-from ..schemas.clarify import ClarifyOutput
-from ..settings import ModelConfig
 
 
 # === Internal Dataclasses for Workflow Routing ===
@@ -647,31 +656,51 @@ def _format_final_output(
 
 
 # === Workflow Factory ===
-def create_dynamic_workflow(model_config: Optional[ModelConfig] = None):
+def create_dynamic_workflow(
+    registry: Optional[ModelRegistry] = None,
+    workflow_model: Optional[ModelName] = None,
+    agent_mapping: Optional[AgentModelMapping] = None,
+):
     """Create the dynamic workflow with review loop.
 
     Args:
-        model_config: Optional model configuration override applied to all agents.
-                     If None, each agent uses singleton settings.
-    """
-    from ..agents.dynamic_triage_agent import (
-        create_user_mode_triage_agent,
-        create_review_mode_triage_agent,
-    )
-    from ..agents.review_agent import create_review_agent
-    from ..agents.clarify_agent import create_clarify_agent
-    from ..agents.servicenow_agent import create_servicenow_agent
-    from ..agents.log_analytics_agent import create_log_analytics_agent
-    from ..agents.service_health_agent import create_service_health_agent
+        registry: ModelRegistry for cloud mode, None for env settings (Mode 1)
+        workflow_model: Model for all agents (required for Mode 2/3)
+        agent_mapping: Per-agent model override (Mode 3)
 
-    # Create agents with shared model config
-    user_mode_triage_agent = create_user_mode_triage_agent(model_config)
-    review_mode_triage_agent = create_review_mode_triage_agent(model_config)
-    review_agent = create_review_agent(model_config)
-    clarify_agent = create_clarify_agent(model_config)
-    servicenow_agent = create_servicenow_agent(model_config)
-    log_analytics_agent = create_log_analytics_agent(model_config)
-    service_health_agent = create_service_health_agent(model_config)
+    Mode 1: create_dynamic_workflow()
+        - Uses env settings (for devui, local dev)
+
+    Mode 2: create_dynamic_workflow(registry, "gpt-4.1-mini")
+        - All agents use gpt-4.1-mini
+
+    Mode 3: create_dynamic_workflow(registry, "gpt-4.1", AgentModelMapping(...))
+        - Per-agent customization
+
+    Raises:
+        ValueError: If registry is provided but workflow_model is None
+    """
+    if registry is None:
+        # Mode 1: env settings
+        user_mode_triage_agent = create_user_mode_triage_agent()
+        review_mode_triage_agent = create_review_mode_triage_agent()
+        review_agent = create_review_agent()
+        clarify_agent = create_clarify_agent()
+        servicenow_agent = create_servicenow_agent()
+        log_analytics_agent = create_log_analytics_agent()
+        service_health_agent = create_service_health_agent()
+    else:
+        # Mode 2 & 3: registry with model resolution
+        if workflow_model is None:
+            raise ValueError("workflow_model is required when registry is provided")
+        model_for = create_model_resolver(workflow_model, agent_mapping)
+        user_mode_triage_agent = create_user_mode_triage_agent(registry, model_for("dynamic_triage_user"))
+        review_mode_triage_agent = create_review_mode_triage_agent(registry, model_for("dynamic_triage_review"))
+        review_agent = create_review_agent(registry, model_for("review"))
+        clarify_agent = create_clarify_agent(registry, model_for("clarify"))
+        servicenow_agent = create_servicenow_agent(registry, model_for("servicenow"))
+        log_analytics_agent = create_log_analytics_agent(registry, model_for("log_analytics"))
+        service_health_agent = create_service_health_agent(registry, model_for("service_health"))
 
     # Create executors - use two separate triage executors for user mode and review mode
     user_mode_triage = UserModeTriageExecutor(user_mode_triage_agent)

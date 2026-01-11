@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from ..factory import create_agent
-from ..settings import ModelConfig
+from ..model_registry import ModelRegistry
 from ..tools.log_analytics_tools import (
     get_pipeline_run_details,
     list_failed_pipelines,
@@ -18,9 +18,6 @@ class LogAnalyticsAgentConfig:
 
     name: str = "log-analytics-agent"
     description: str = "Queries Azure Data Factory pipeline execution logs"
-    deployment_name: str = ""
-    api_key: str = ""
-    endpoint: str = ""
     instructions: str = """You are an Azure Log Analytics assistant for ADF pipeline monitoring.
 
 You can:
@@ -45,15 +42,21 @@ Always format your response in Markdown:
 CONFIG = LogAnalyticsAgentConfig()
 
 
-def create_log_analytics_agent(model_config: Optional[ModelConfig] = None):
-    """Create and return the Log Analytics agent."""
+def create_log_analytics_agent(
+    registry: Optional[ModelRegistry] = None,
+    model_name: Optional[str] = None,
+):
+    """Create and return the Log Analytics agent.
+
+    Args:
+        registry: ModelRegistry for cloud mode, None for env settings
+        model_name: Model to use (only when registry provided)
+    """
     return create_agent(
         name=CONFIG.name,
         description=CONFIG.description,
         instructions=CONFIG.instructions,
-        model_config=model_config,
+        registry=registry,
+        model_name=model_name,
         tools=[query_pipeline_status, get_pipeline_run_details, list_failed_pipelines],
-        deployment_name=CONFIG.deployment_name,
-        api_key=CONFIG.api_key,
-        endpoint=CONFIG.endpoint,
     )

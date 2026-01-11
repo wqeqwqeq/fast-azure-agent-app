@@ -1,19 +1,19 @@
 """Utility modules for Azure OpenAI configuration.
 
-NOTE: Settings have been moved to app.opsagent.settings.
+NOTE: Settings have been moved to app.opsagent.model_registry.
 This module re-exports for backward compatibility.
 """
 
-from ..settings import (
+from ..model_registry import (
     AzOpenAIEnvSettings,
-    ModelConfig,
+    ModelDefinition,
+    ModelName,
     ResolvedModelConfig,
-    resolve_model_config,
 )
 
 __all__ = [
     "AzOpenAIEnvSettings",
-    "ModelConfig",
+    "ModelDefinition",
+    "ModelName",
     "ResolvedModelConfig",
-    "resolve_model_config",
 ]

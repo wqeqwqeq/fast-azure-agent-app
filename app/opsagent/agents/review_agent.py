@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from typing import Optional
 
 from ..factory import create_agent
+from ..model_registry import ModelRegistry
 from ..schemas.review import ReviewOutput
-from ..settings import ModelConfig
 
 
 @dataclass(frozen=True)
@@ -14,9 +14,6 @@ class ReviewAgentConfig:
 
     name: str = "review-agent"
     description: str = "Reviews execution results to ensure completeness and quality of answers"
-    deployment_name: str = ""
-    api_key: str = ""
-    endpoint: str = ""
     instructions: str = """You are a review agent that evaluates execution results against the original user query.
 
 ## Your Task
@@ -76,15 +73,21 @@ When suggesting retry approaches, reference these agents:
 CONFIG = ReviewAgentConfig()
 
 
-def create_review_agent(model_config: Optional[ModelConfig] = None):
-    """Create and return the Review agent for result evaluation."""
+def create_review_agent(
+    registry: Optional[ModelRegistry] = None,
+    model_name: Optional[str] = None,
+):
+    """Create and return the Review agent for result evaluation.
+
+    Args:
+        registry: ModelRegistry for cloud mode, None for env settings
+        model_name: Model to use (only when registry provided)
+    """
     return create_agent(
         name=CONFIG.name,
         description=CONFIG.description,
         instructions=CONFIG.instructions,
-        model_config=model_config,
+        registry=registry,
+        model_name=model_name,
         response_format=ReviewOutput,
-        deployment_name=CONFIG.deployment_name,
-        api_key=CONFIG.api_key,
-        endpoint=CONFIG.endpoint,
     )

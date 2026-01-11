@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from typing import Optional
 
 from ..factory import create_agent
+from ..model_registry import ModelRegistry
 from ..schemas.triage import TriageOutput
-from ..settings import ModelConfig
 
 
 @dataclass(frozen=True)
@@ -14,9 +14,6 @@ class TriageAgentConfig:
 
     name: str = "triage-agent"
     description: str = "Routes user queries to specialized IT operations agents"
-    deployment_name: str = ""
-    api_key: str = ""
-    endpoint: str = ""
     instructions: str = """You are a triage agent for IT operations. Your job is to analyze the user's **LATEST question** and route it to the appropriate specialized agent(s).
 
 ## IMPORTANT: Focus on the Latest Question
@@ -69,15 +66,21 @@ Latest: "What's the weather?"
 CONFIG = TriageAgentConfig()
 
 
-def create_triage_agent(model_config: Optional[ModelConfig] = None):
-    """Create and return the Triage agent."""
+def create_triage_agent(
+    registry: Optional[ModelRegistry] = None,
+    model_name: Optional[str] = None,
+):
+    """Create and return the Triage agent.
+
+    Args:
+        registry: ModelRegistry for cloud mode, None for env settings
+        model_name: Model to use (only when registry provided)
+    """
     return create_agent(
         name=CONFIG.name,
         description=CONFIG.description,
         instructions=CONFIG.instructions,
-        model_config=model_config,
+        registry=registry,
+        model_name=model_name,
         response_format=TriageOutput,
-        deployment_name=CONFIG.deployment_name,
-        api_key=CONFIG.api_key,
-        endpoint=CONFIG.endpoint,
     )

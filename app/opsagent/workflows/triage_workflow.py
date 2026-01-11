@@ -18,9 +18,13 @@ from agent_framework import (
 )
 from typing_extensions import Never
 
-from ..schemas.common import MessageData, WorkflowInput
-from ..schemas.triage import TaskAssignment, TriageOutput
-from ..settings import ModelConfig
+from ..agents.log_analytics_agent import create_log_analytics_agent
+from ..agents.service_health_agent import create_service_health_agent
+from ..agents.servicenow_agent import create_servicenow_agent
+from ..agents.triage_agent import create_triage_agent
+from ..model_registry import AgentModelMapping, ModelName, ModelRegistry, create_model_resolver
+from ..schemas.common import WorkflowInput
+from ..schemas.triage import TriageOutput
 
 
 # === Custom Response for Fan-In ===
@@ -202,23 +206,45 @@ def select_dispatch_or_reject(triage: TriageOutput, target_ids: list[str]) -> li
 
 
 # === Workflow Factory ===
-def create_triage_workflow(model_config: Optional[ModelConfig] = None):
+def create_triage_workflow(
+    registry: Optional[ModelRegistry] = None,
+    workflow_model: Optional[ModelName] = None,
+    agent_mapping: Optional[AgentModelMapping] = None,
+):
     """Create the triage workflow with conditional fan-out.
 
     Args:
-        model_config: Optional model configuration override applied to all agents.
-                     If None, each agent uses singleton settings.
-    """
-    from ..agents.triage_agent import create_triage_agent
-    from ..agents.servicenow_agent import create_servicenow_agent
-    from ..agents.log_analytics_agent import create_log_analytics_agent
-    from ..agents.service_health_agent import create_service_health_agent
+        registry: ModelRegistry for cloud mode, None for env settings (Mode 1)
+        workflow_model: Model for all agents (required for Mode 2/3)
+        agent_mapping: Per-agent model override (Mode 3)
 
-    # Create all agents using factory functions with shared model config
-    triage = create_triage_agent(model_config)
-    servicenow = create_servicenow_agent(model_config)
-    log_analytics = create_log_analytics_agent(model_config)
-    service_health = create_service_health_agent(model_config)
+    Mode 1: create_triage_workflow()
+        - Uses env settings (for devui, local dev)
+
+    Mode 2: create_triage_workflow(registry, "gpt-4.1-mini")
+        - All agents use gpt-4.1-mini
+
+    Mode 3: create_triage_workflow(registry, "gpt-4.1", AgentModelMapping(...))
+        - Per-agent customization
+
+    Raises:
+        ValueError: If registry is provided but workflow_model is None
+    """
+    if registry is None:
+        # Mode 1: env settings
+        triage = create_triage_agent()
+        servicenow = create_servicenow_agent()
+        log_analytics = create_log_analytics_agent()
+        service_health = create_service_health_agent()
+    else:
+        # Mode 2 & 3: registry with model resolution
+        if workflow_model is None:
+            raise ValueError("workflow_model is required when registry is provided")
+        model_for = create_model_resolver(workflow_model, agent_mapping)
+        triage = create_triage_agent(registry, model_for("triage"))
+        servicenow = create_servicenow_agent(registry, model_for("servicenow"))
+        log_analytics = create_log_analytics_agent(registry, model_for("log_analytics"))
+        service_health = create_service_health_agent(registry, model_for("service_health"))
 
     # Triage uses standard AgentExecutor (for structured output)
     triage_executor = AgentExecutor(triage, id="triage_agent")
@@ -242,8 +268,8 @@ def create_triage_workflow(model_config: Optional[ModelConfig] = None):
     # Build workflow
     workflow = (
         WorkflowBuilder(
-            name = 'Data Ops Triage Workflow',
-            description = 'Routes data ops queries to specialized agents for ServiceNow, Log Analytics, and Service Health.'
+            name='Data Ops Triage Workflow',
+            description='Routes data ops queries to specialized agents for ServiceNow, Log Analytics, and Service Health.'
         )
         .set_start_executor(store_query)
         .add_edge(store_query, triage_executor)

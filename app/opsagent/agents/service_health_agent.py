@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from ..factory import create_agent
-from ..settings import ModelConfig
+from ..model_registry import ModelRegistry
 from ..tools.service_health_tools import (
     check_azure_service_health,
     check_databricks_health,
@@ -18,9 +18,6 @@ class ServiceHealthAgentConfig:
 
     name: str = "service-health-agent"
     description: str = "Monitors health status of Databricks, Snowflake, and Azure services"
-    deployment_name: str = ""
-    api_key: str = ""
-    endpoint: str = ""
     instructions: str = """You are a service health monitoring assistant. You check the status of:
 - Databricks (workspace and clusters)
 - Snowflake (warehouses)
@@ -46,15 +43,21 @@ Always format your response in Markdown:
 CONFIG = ServiceHealthAgentConfig()
 
 
-def create_service_health_agent(model_config: Optional[ModelConfig] = None):
-    """Create and return the Service Health agent."""
+def create_service_health_agent(
+    registry: Optional[ModelRegistry] = None,
+    model_name: Optional[str] = None,
+):
+    """Create and return the Service Health agent.
+
+    Args:
+        registry: ModelRegistry for cloud mode, None for env settings
+        model_name: Model to use (only when registry provided)
+    """
     return create_agent(
         name=CONFIG.name,
         description=CONFIG.description,
         instructions=CONFIG.instructions,
-        model_config=model_config,
+        registry=registry,
+        model_name=model_name,
         tools=[check_databricks_health, check_snowflake_health, check_azure_service_health],
-        deployment_name=CONFIG.deployment_name,
-        api_key=CONFIG.api_key,
-        endpoint=CONFIG.endpoint,
     )
