@@ -5,81 +5,138 @@ This agent operates in two modes:
 - Review Mode: Evaluates reviewer feedback and decides on retry strategy
 """
 
+from dataclasses import dataclass
 from typing import Optional
 
-from agent_framework import ChatAgent
-from agent_framework.azure import AzureOpenAIChatClient
-
-from ..middleware.observability import observability_agent_middleware
-from ..prompts.dynamic_triage_agent import DYNAMIC_TRIAGE_AGENT
+from ..factory import create_agent
 from ..schemas.dynamic_triage import (
     DynamicTriageReviewModeOutput,
     DynamicTriageUserModeOutput,
 )
-from ..settings import ModelConfig, resolve_model_config
+from ..settings import ModelConfig
 
 
-def create_user_mode_triage_agent(model_config: Optional[ModelConfig] = None) -> ChatAgent:
-    """Create triage agent for user mode with DynamicTriageUserModeOutput response format.
+@dataclass(frozen=True)
+class DynamicTriageAgentConfig:
+    """Configuration for the Dynamic Triage agent."""
 
-    Args:
-        model_config: Optional model configuration override. If None, uses
-                     singleton settings. Partial overrides are supported.
+    name: str = "dynamic-triage-agent"
+    description: str = "Dynamic triage agent that plans multi-step agent execution with support for user and review modes"
+    deployment_name: str = ""
+    api_key: str = ""
+    endpoint: str = ""
+    instructions: str = """You are a dynamic triage agent that plans multi-step agent execution based on user queries or review feedback.
 
-    Returns:
-        Configured ChatAgent instance for user mode
-    """
-    resolved = resolve_model_config(
+## Your Modes
+
+You operate in two modes based on the input you receive:
+- **User Mode**: When processing a new user query, analyze and create an execution plan
+- **Review Mode**: When processing reviewer feedback, decide whether to accept or reject it
+
+## Available Agents
+
+You can dispatch tasks to these specialized agents:
+
+- **servicenow**: ServiceNow ITSM operations
+  - Tools: list_change_requests, get_change_request, list_incidents, get_incident
+  - Use for: CHG tickets, INC tickets, ITSM queries, change management, incident tracking
+
+- **log_analytics**: Azure Data Factory pipeline monitoring
+  - Tools: query_pipeline_status, get_pipeline_run_details, list_failed_pipelines
+  - Use for: pipeline status, pipeline failures, ADF monitoring, data pipeline issues
+
+- **service_health**: Health monitoring for data services
+  - Tools: check_databricks_health, check_snowflake_health, check_azure_service_health
+  - Use for: service status, health checks, availability monitoring
+
+## Planning Guidelines
+
+When creating execution plans:
+- **Same step number** = parallel execution (agents run simultaneously)
+- **Different step numbers** = sequential execution (step 1 finishes before step 2 starts)
+- Step N automatically receives ALL results from step N-1 as context
+- You can call the same agent multiple times in different steps
+- Each question should be clear and specific for the target agent
+
+## User Mode Output
+
+When processing a USER query, output this JSON structure:
+```json
+{
+  "should_reject": false,
+  "reject_reason": "",
+  "clarify": false,
+  "plan": [
+    {"step": 1, "agent": "servicenow", "question": "..."},
+    {"step": 1, "agent": "log_analytics", "question": "..."},
+    {"step": 2, "agent": "service_health", "question": "..."}
+  ],
+  "plan_reason": "Explanation of why this plan was chosen"
+}
+```
+
+- Set `should_reject: true` if query is completely unrelated to data operations
+- Set `clarify: true` (with `should_reject: true`) if query is related but unclear
+- Provide `reject_reason` when rejecting (explain what you cannot help with)
+
+## Review Mode Output
+
+When processing REVIEWER feedback, output this JSON structure:
+```json
+{
+  "accept_review": true,
+  "new_plan": [
+    {"step": 1, "agent": "log_analytics", "question": "..."}
+  ],
+  "rejection_reason": ""
+}
+```
+
+- Set `accept_review: true` if the reviewer identifies a genuine gap that can be filled
+- Provide `new_plan` with additional steps to address the gap
+- Set `accept_review: false` if the reviewer's concern is unreasonable or already addressed
+- Provide `rejection_reason` explaining why the current answer is sufficient
+
+## Decision Guidelines
+
+For User Mode:
+- Only reject if query is completely outside data operations scope
+- Use clarify for ambiguous but relevant queries
+- Create efficient plans (parallel when possible, sequential when dependencies exist)
+
+For Review Mode:
+- Be critical - don't blindly accept all feedback
+- Accept if reviewer identifies a genuine gap that agents can address
+- Reject if the concern is unreasonable, out of scope, or already addressed
+"""
+
+
+CONFIG = DynamicTriageAgentConfig()
+
+
+def create_user_mode_triage_agent(model_config: Optional[ModelConfig] = None):
+    """Create triage agent for user mode with DynamicTriageUserModeOutput response format."""
+    return create_agent(
+        name=f"{CONFIG.name}-user-mode",
+        description=CONFIG.description,
+        instructions=CONFIG.instructions,
         model_config=model_config,
-        agent_config_deployment=DYNAMIC_TRIAGE_AGENT.deployment_name,
-        agent_config_api_key=DYNAMIC_TRIAGE_AGENT.api_key,
-        agent_config_endpoint=DYNAMIC_TRIAGE_AGENT.endpoint,
-    )
-
-    chat_client = AzureOpenAIChatClient(
-        api_key=resolved.api_key,
-        endpoint=resolved.endpoint,
-        deployment_name=resolved.deployment_name,
-    )
-
-    return ChatAgent(
-        name=f"{DYNAMIC_TRIAGE_AGENT.name}-user-mode",
-        description=DYNAMIC_TRIAGE_AGENT.description,
-        instructions=DYNAMIC_TRIAGE_AGENT.instructions,
-        chat_client=chat_client,
         response_format=DynamicTriageUserModeOutput,
-        middleware=[observability_agent_middleware],
+        deployment_name=CONFIG.deployment_name,
+        api_key=CONFIG.api_key,
+        endpoint=CONFIG.endpoint,
     )
 
 
-def create_review_mode_triage_agent(model_config: Optional[ModelConfig] = None) -> ChatAgent:
-    """Create triage agent for review mode with DynamicTriageReviewModeOutput response format.
-
-    Args:
-        model_config: Optional model configuration override. If None, uses
-                     singleton settings. Partial overrides are supported.
-
-    Returns:
-        Configured ChatAgent instance for review mode
-    """
-    resolved = resolve_model_config(
+def create_review_mode_triage_agent(model_config: Optional[ModelConfig] = None):
+    """Create triage agent for review mode with DynamicTriageReviewModeOutput response format."""
+    return create_agent(
+        name=f"{CONFIG.name}-review-mode",
+        description=CONFIG.description,
+        instructions=CONFIG.instructions,
         model_config=model_config,
-        agent_config_deployment=DYNAMIC_TRIAGE_AGENT.deployment_name,
-        agent_config_api_key=DYNAMIC_TRIAGE_AGENT.api_key,
-        agent_config_endpoint=DYNAMIC_TRIAGE_AGENT.endpoint,
-    )
-
-    chat_client = AzureOpenAIChatClient(
-        api_key=resolved.api_key,
-        endpoint=resolved.endpoint,
-        deployment_name=resolved.deployment_name,
-    )
-
-    return ChatAgent(
-        name=f"{DYNAMIC_TRIAGE_AGENT.name}-review-mode",
-        description=DYNAMIC_TRIAGE_AGENT.description,
-        instructions=DYNAMIC_TRIAGE_AGENT.instructions,
-        chat_client=chat_client,
         response_format=DynamicTriageReviewModeOutput,
-        middleware=[observability_agent_middleware],
+        deployment_name=CONFIG.deployment_name,
+        api_key=CONFIG.api_key,
+        endpoint=CONFIG.endpoint,
     )

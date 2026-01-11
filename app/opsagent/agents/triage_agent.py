@@ -1,50 +1,83 @@
 """Triage Agent for routing user queries to specialized agents."""
 
+from dataclasses import dataclass
 from typing import Optional
 
-from agent_framework import ChatAgent
-from agent_framework.azure import AzureOpenAIChatClient
-
-from ..middleware.observability import (
-    observability_agent_middleware,
-    observability_function_middleware,
-)
-from ..prompts.triage_agent import TRIAGE_AGENT
+from ..factory import create_agent
 from ..schemas.triage import TriageOutput
-from ..settings import ModelConfig, resolve_model_config
+from ..settings import ModelConfig
 
 
-def create_triage_agent(model_config: Optional[ModelConfig] = None) -> ChatAgent:
-    """Create and return the Triage agent.
+@dataclass(frozen=True)
+class TriageAgentConfig:
+    """Configuration for the Triage agent."""
 
-    Args:
-        model_config: Optional model configuration override. If None, uses
-                     singleton settings. Partial overrides are supported.
+    name: str = "triage-agent"
+    description: str = "Routes user queries to specialized IT operations agents"
+    deployment_name: str = ""
+    api_key: str = ""
+    endpoint: str = ""
+    instructions: str = """You are a triage agent for IT operations. Your job is to analyze the user's **LATEST question** and route it to the appropriate specialized agent(s).
 
-    Returns:
-        Configured ChatAgent instance
-    """
-    resolved = resolve_model_config(
+## IMPORTANT: Focus on the Latest Question
+- **Primary focus**: The user's most recent message (the last user message in the conversation)
+- **Conversation history**: Use previous messages ONLY as context to resolve references (e.g., "that incident", "the failed ones", "show me more details")
+- Do NOT re-process or re-route previous questions - only handle the current one
+
+## Specialized Agents Available:
+- **servicenow**: ServiceNow ITSM operations - change requests (CHG), incidents (INC)
+- **log_analytics**: Azure Data Factory pipeline monitoring - pipeline status, failed pipelines
+- **service_health**: Service health checks - Databricks, Snowflake, Azure services
+
+## Your Task:
+1. Identify what the user is asking in their LATEST message
+2. If UNRELATED to any specialized agent, set should_reject=true
+3. If related, create task(s) for appropriate agent(s)
+4. When the latest question references something from history (e.g., "show details for that"), resolve the reference into a clear, specific, self-contained task question
+
+## Output Format (JSON):
+{
+  "should_reject": false,
+  "reject_reason": "",
+  "tasks": [
+    {"question": "Clear, specific task question", "agent": "agent_name"}
+  ]
+}
+
+## Examples:
+
+### Example 1: Simple question (no history needed)
+User: "List all open change requests"
+-> Task: {"question": "List all open change requests", "agent": "servicenow"}
+
+### Example 2: Follow-up with reference to history
+History: User asked "List incidents", assistant showed INC001234, INC005678
+Latest: "show me details for INC001234"
+-> Task: {"question": "Show details for incident INC001234", "agent": "servicenow"}
+
+### Example 3: Ambiguous reference resolved from context
+History: User asked "Check pipeline status"
+Latest: "what about the failed ones?"
+-> Task: {"question": "List failed Azure Data Factory pipelines", "agent": "log_analytics"}
+
+### Example 4: Rejection
+Latest: "What's the weather?"
+-> should_reject: true, reject_reason: "Weather is not related to IT operations"
+"""
+
+
+CONFIG = TriageAgentConfig()
+
+
+def create_triage_agent(model_config: Optional[ModelConfig] = None):
+    """Create and return the Triage agent."""
+    return create_agent(
+        name=CONFIG.name,
+        description=CONFIG.description,
+        instructions=CONFIG.instructions,
         model_config=model_config,
-        agent_config_deployment=TRIAGE_AGENT.deployment_name,
-        agent_config_api_key=TRIAGE_AGENT.api_key,
-        agent_config_endpoint=TRIAGE_AGENT.endpoint,
-    )
-
-    chat_client = AzureOpenAIChatClient(
-        api_key=resolved.api_key,
-        endpoint=resolved.endpoint,
-        deployment_name=resolved.deployment_name,
-    )
-
-    return ChatAgent(
-        name=TRIAGE_AGENT.name,
-        description=TRIAGE_AGENT.description,
-        instructions=TRIAGE_AGENT.instructions,
-        chat_client=chat_client,
         response_format=TriageOutput,
-        middleware=[
-            observability_agent_middleware,
-            observability_function_middleware,
-        ],
+        deployment_name=CONFIG.deployment_name,
+        api_key=CONFIG.api_key,
+        endpoint=CONFIG.endpoint,
     )

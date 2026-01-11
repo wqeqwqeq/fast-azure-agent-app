@@ -1,48 +1,90 @@
-"""Review Agent for evaluating execution results.
+"""Review Agent for evaluating execution results."""
 
-This agent reviews the output from specialized agents and determines
-if the user's query has been fully answered.
-"""
-
+from dataclasses import dataclass
 from typing import Optional
 
-from agent_framework import ChatAgent
-from agent_framework.azure import AzureOpenAIChatClient
-
-from ..middleware.observability import observability_agent_middleware
-from ..prompts.review_agent import REVIEW_AGENT
+from ..factory import create_agent
 from ..schemas.review import ReviewOutput
-from ..settings import ModelConfig, resolve_model_config
+from ..settings import ModelConfig
 
 
-def create_review_agent(model_config: Optional[ModelConfig] = None) -> ChatAgent:
-    """Create and return the Review agent for result evaluation.
+@dataclass(frozen=True)
+class ReviewAgentConfig:
+    """Configuration for the Review agent."""
 
-    Args:
-        model_config: Optional model configuration override. If None, uses
-                     singleton settings. Partial overrides are supported.
+    name: str = "review-agent"
+    description: str = "Reviews execution results to ensure completeness and quality of answers"
+    deployment_name: str = ""
+    api_key: str = ""
+    endpoint: str = ""
+    instructions: str = """You are a review agent that evaluates execution results against the original user query.
 
-    Returns:
-        Configured ChatAgent instance
-    """
-    resolved = resolve_model_config(
+## Your Task
+
+Given the user's original question and agent execution results:
+1. Determine if ALL aspects of the question are answered
+2. If complete, create a comprehensive summary of the findings
+3. If incomplete, identify what's missing and suggest how to address it
+
+## Evaluation Criteria
+
+Check for:
+- **Completeness**: Are all parts of the user's question addressed?
+- **Relevance**: Do the responses actually answer what was asked?
+- **Consistency**: Are there any contradictions in the responses?
+- **Gaps**: Is there information that should have been retrieved but wasn't?
+
+## Output Format
+
+Provide your assessment in this JSON structure:
+```json
+{
+  "is_complete": true,
+  "summary": "Comprehensive summary of findings when complete",
+  "missing_aspects": ["List of what's missing if incomplete"],
+  "suggested_approach": "How to address the gaps using available agents",
+  "confidence": 0.85
+}
+```
+
+## Field Descriptions
+
+- **is_complete**: `true` if all user questions are adequately answered, `false` otherwise
+- **summary**: Final user-facing summary (only meaningful when `is_complete: true`)
+- **missing_aspects**: Specific list of what information is missing (when incomplete)
+- **suggested_approach**: Concrete suggestion for retry using available agents
+- **confidence**: Your confidence in the assessment (0.0 to 1.0)
+
+## Available Agents for Suggestions
+
+When suggesting retry approaches, reference these agents:
+- **servicenow**: Change requests (CHG), incidents (INC), ITSM operations
+- **log_analytics**: Pipeline monitoring, ADF pipeline status, failures
+- **service_health**: Databricks, Snowflake, Azure service health checks
+
+## Important Guidelines
+
+- Be specific about what's missing - vague feedback is not helpful
+- Only flag as incomplete if there's a clear, addressable gap
+- Consider that you can only trigger ONE retry - make it count
+- If a previous retry was already attempted (indicated in context), accept the result
+- Don't be overly critical - if the response reasonably addresses the query, accept it
+- Focus on substantive gaps, not stylistic improvements
+"""
+
+
+CONFIG = ReviewAgentConfig()
+
+
+def create_review_agent(model_config: Optional[ModelConfig] = None):
+    """Create and return the Review agent for result evaluation."""
+    return create_agent(
+        name=CONFIG.name,
+        description=CONFIG.description,
+        instructions=CONFIG.instructions,
         model_config=model_config,
-        agent_config_deployment=REVIEW_AGENT.deployment_name,
-        agent_config_api_key=REVIEW_AGENT.api_key,
-        agent_config_endpoint=REVIEW_AGENT.endpoint,
-    )
-
-    chat_client = AzureOpenAIChatClient(
-        api_key=resolved.api_key,
-        endpoint=resolved.endpoint,
-        deployment_name=resolved.deployment_name,
-    )
-
-    return ChatAgent(
-        name=REVIEW_AGENT.name,
-        description=REVIEW_AGENT.description,
-        instructions=REVIEW_AGENT.instructions,
-        chat_client=chat_client,
         response_format=ReviewOutput,
-        middleware=[observability_agent_middleware],
+        deployment_name=CONFIG.deployment_name,
+        api_key=CONFIG.api_key,
+        endpoint=CONFIG.endpoint,
     )

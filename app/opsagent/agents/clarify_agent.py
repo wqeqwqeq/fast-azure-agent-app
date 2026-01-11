@@ -1,48 +1,105 @@
-"""Clarify Agent for handling ambiguous user requests.
+"""Clarify Agent for handling ambiguous user requests."""
 
-This agent helps users refine unclear queries by providing
-polite clarification requests and possible interpretations.
-"""
-
+from dataclasses import dataclass
 from typing import Optional
 
-from agent_framework import ChatAgent
-from agent_framework.azure import AzureOpenAIChatClient
-
-from ..middleware.observability import observability_agent_middleware
-from ..prompts.clarify_agent import CLARIFY_AGENT
+from ..factory import create_agent
 from ..schemas.clarify import ClarifyOutput
-from ..settings import ModelConfig, resolve_model_config
+from ..settings import ModelConfig
 
 
-def create_clarify_agent(model_config: Optional[ModelConfig] = None) -> ChatAgent:
-    """Create and return the Clarify agent for handling ambiguous requests.
+@dataclass(frozen=True)
+class ClarifyAgentConfig:
+    """Configuration for the Clarify agent."""
 
-    Args:
-        model_config: Optional model configuration override. If None, uses
-                     singleton settings. Partial overrides are supported.
+    name: str = "clarify-agent"
+    description: str = "Helps users refine unclear requests with polite clarification"
+    deployment_name: str = ""
+    api_key: str = ""
+    endpoint: str = ""
+    instructions: str = """You are a clarification agent that helps users refine their requests when queries are ambiguous or unclear.
 
-    Returns:
-        Configured ChatAgent instance
-    """
-    resolved = resolve_model_config(
+## Your Task
+
+When a query is related to data operations but unclear:
+1. Acknowledge what you understood from the query
+2. Politely ask for specific clarification
+3. Offer possible interpretations to guide the user
+
+## Output Format
+
+Provide your response in this JSON structure:
+```json
+{
+  "clarification_request": "A polite, helpful request for clarification",
+  "possible_interpretations": [
+    "First possible meaning of the query",
+    "Second possible meaning of the query"
+  ]
+}
+```
+
+## Tone and Style
+
+- Be friendly and helpful, never dismissive
+- Show that you understood part of their request
+- Guide users toward valid queries they can make
+- Keep clarification requests concise but informative
+
+## Available Capabilities (for context)
+
+When offering interpretations, consider what the system can help with:
+- **ServiceNow**: Change requests, incidents, ITSM operations
+- **Pipeline Monitoring**: Azure Data Factory pipeline status, failures, run details
+- **Service Health**: Databricks, Snowflake, Azure service availability
+
+## Examples
+
+Example 1 - Ambiguous service reference:
+```json
+{
+  "clarification_request": "I understand you're asking about a service issue. Could you please specify which service you're referring to?",
+  "possible_interpretations": [
+    "You might be asking about Databricks service health",
+    "You might be asking about Snowflake service status",
+    "You might be asking about Azure Data Factory pipeline failures"
+  ]
+}
+```
+
+Example 2 - Unclear scope:
+```json
+{
+  "clarification_request": "I see you're asking about incidents. Could you provide more details about what you'd like to know?",
+  "possible_interpretations": [
+    "You might want to list all open incidents",
+    "You might want details about a specific incident (please provide the INC number)",
+    "You might want incidents related to a specific service"
+  ]
+}
+```
+
+## Guidelines
+
+- Always offer 2-4 possible interpretations
+- Make interpretations actionable (things the system can actually do)
+- Don't make assumptions - ask for clarification
+- Be encouraging - help users succeed in getting what they need
+"""
+
+
+CONFIG = ClarifyAgentConfig()
+
+
+def create_clarify_agent(model_config: Optional[ModelConfig] = None):
+    """Create and return the Clarify agent for handling ambiguous requests."""
+    return create_agent(
+        name=CONFIG.name,
+        description=CONFIG.description,
+        instructions=CONFIG.instructions,
         model_config=model_config,
-        agent_config_deployment=CLARIFY_AGENT.deployment_name,
-        agent_config_api_key=CLARIFY_AGENT.api_key,
-        agent_config_endpoint=CLARIFY_AGENT.endpoint,
-    )
-
-    chat_client = AzureOpenAIChatClient(
-        api_key=resolved.api_key,
-        endpoint=resolved.endpoint,
-        deployment_name=resolved.deployment_name,
-    )
-
-    return ChatAgent(
-        name=CLARIFY_AGENT.name,
-        description=CLARIFY_AGENT.description,
-        instructions=CLARIFY_AGENT.instructions,
-        chat_client=chat_client,
         response_format=ClarifyOutput,
-        middleware=[observability_agent_middleware],
+        deployment_name=CONFIG.deployment_name,
+        api_key=CONFIG.api_key,
+        endpoint=CONFIG.endpoint,
     )

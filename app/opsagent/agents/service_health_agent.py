@@ -1,16 +1,10 @@
 """Service Health Agent for monitoring data services."""
 
+from dataclasses import dataclass
 from typing import Optional
 
-from agent_framework import ChatAgent
-from agent_framework.azure import AzureOpenAIChatClient
-
-from ..middleware.observability import (
-    observability_agent_middleware,
-    observability_function_middleware,
-)
-from ..prompts.service_health_agent import SERVICE_HEALTH_AGENT
-from ..settings import ModelConfig, resolve_model_config
+from ..factory import create_agent
+from ..settings import ModelConfig
 from ..tools.service_health_tools import (
     check_azure_service_health,
     check_databricks_health,
@@ -18,37 +12,49 @@ from ..tools.service_health_tools import (
 )
 
 
-def create_service_health_agent(model_config: Optional[ModelConfig] = None) -> ChatAgent:
-    """Create and return the Service Health agent.
+@dataclass(frozen=True)
+class ServiceHealthAgentConfig:
+    """Configuration for the Service Health agent."""
 
-    Args:
-        model_config: Optional model configuration override. If None, uses
-                     singleton settings. Partial overrides are supported.
+    name: str = "service-health-agent"
+    description: str = "Monitors health status of Databricks, Snowflake, and Azure services"
+    deployment_name: str = ""
+    api_key: str = ""
+    endpoint: str = ""
+    instructions: str = """You are a service health monitoring assistant. You check the status of:
+- Databricks (workspace and clusters)
+- Snowflake (warehouses)
+- Azure services (ADF)
 
-    Returns:
-        Configured ChatAgent instance
-    """
-    resolved = resolve_model_config(
+Health status is either HEALTHY or UNHEALTHY.
+
+When responding:
+- State the service name clearly
+- Provide HEALTHY or UNHEALTHY status
+- Include timestamp of the check
+- If unhealthy, provide brief reason
+
+## Output Format
+Always format your response in Markdown:
+- Use **bold** for service names
+- Use 🟢 HEALTHY or 🔴 UNHEALTHY status indicators
+- Use tables when reporting multiple services
+- Use `code` formatting for timestamps
+"""
+
+
+CONFIG = ServiceHealthAgentConfig()
+
+
+def create_service_health_agent(model_config: Optional[ModelConfig] = None):
+    """Create and return the Service Health agent."""
+    return create_agent(
+        name=CONFIG.name,
+        description=CONFIG.description,
+        instructions=CONFIG.instructions,
         model_config=model_config,
-        agent_config_deployment=SERVICE_HEALTH_AGENT.deployment_name,
-        agent_config_api_key=SERVICE_HEALTH_AGENT.api_key,
-        agent_config_endpoint=SERVICE_HEALTH_AGENT.endpoint,
-    )
-
-    chat_client = AzureOpenAIChatClient(
-        api_key=resolved.api_key,
-        endpoint=resolved.endpoint,
-        deployment_name=resolved.deployment_name,
-    )
-
-    return ChatAgent(
-        name=SERVICE_HEALTH_AGENT.name,
-        description=SERVICE_HEALTH_AGENT.description,
-        instructions=SERVICE_HEALTH_AGENT.instructions,
-        chat_client=chat_client,
         tools=[check_databricks_health, check_snowflake_health, check_azure_service_health],
-        middleware=[
-            observability_agent_middleware,
-            observability_function_middleware,
-        ],
+        deployment_name=CONFIG.deployment_name,
+        api_key=CONFIG.api_key,
+        endpoint=CONFIG.endpoint,
     )

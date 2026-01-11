@@ -1,16 +1,10 @@
 """ServiceNow Agent for ITSM operations."""
 
+from dataclasses import dataclass
 from typing import Optional
 
-from agent_framework import ChatAgent
-from agent_framework.azure import AzureOpenAIChatClient
-
-from ..middleware.observability import (
-    observability_agent_middleware,
-    observability_function_middleware,
-)
-from ..prompts.servicenow_agent import SERVICENOW_AGENT
-from ..settings import ModelConfig, resolve_model_config
+from ..factory import create_agent
+from ..settings import ModelConfig
 from ..tools.servicenow_tools import (
     get_change_request,
     get_incident,
@@ -19,37 +13,47 @@ from ..tools.servicenow_tools import (
 )
 
 
-def create_servicenow_agent(model_config: Optional[ModelConfig] = None) -> ChatAgent:
-    """Create and return the ServiceNow agent.
+@dataclass(frozen=True)
+class ServiceNowAgentConfig:
+    """Configuration for the ServiceNow agent."""
 
-    Args:
-        model_config: Optional model configuration override. If None, uses
-                     singleton settings. Partial overrides are supported.
+    name: str = "servicenow-agent"
+    description: str = "Handles ServiceNow operations: change requests and incidents"
+    deployment_name: str = ""
+    api_key: str = ""
+    endpoint: str = ""
+    instructions: str = """You are a ServiceNow ITSM assistant. You help users with:
+- Change Request management (CHG tickets)
+- Incident management (INC tickets)
 
-    Returns:
-        Configured ChatAgent instance
-    """
-    resolved = resolve_model_config(
+You can LIST multiple records or GET a single record by ticket number.
+
+When responding:
+- Present data clearly with ticket numbers prominent
+- Include status and priority information
+- If no results, explain possible reasons
+
+## Output Format
+Always format your response in Markdown:
+- Use **bold** for ticket numbers (e.g., **CHG0012345**)
+- Use tables for listing multiple records
+- Use bullet points for details
+- Use `code` formatting for technical IDs
+"""
+
+
+CONFIG = ServiceNowAgentConfig()
+
+
+def create_servicenow_agent(model_config: Optional[ModelConfig] = None):
+    """Create and return the ServiceNow agent."""
+    return create_agent(
+        name=CONFIG.name,
+        description=CONFIG.description,
+        instructions=CONFIG.instructions,
         model_config=model_config,
-        agent_config_deployment=SERVICENOW_AGENT.deployment_name,
-        agent_config_api_key=SERVICENOW_AGENT.api_key,
-        agent_config_endpoint=SERVICENOW_AGENT.endpoint,
-    )
-
-    chat_client = AzureOpenAIChatClient(
-        api_key=resolved.api_key,
-        endpoint=resolved.endpoint,
-        deployment_name=resolved.deployment_name,
-    )
-
-    return ChatAgent(
-        name=SERVICENOW_AGENT.name,
-        description=SERVICENOW_AGENT.description,
-        instructions=SERVICENOW_AGENT.instructions,
-        chat_client=chat_client,
         tools=[list_change_requests, get_change_request, list_incidents, get_incident],
-        middleware=[
-            observability_agent_middleware,
-            observability_function_middleware,
-        ],
+        deployment_name=CONFIG.deployment_name,
+        api_key=CONFIG.api_key,
+        endpoint=CONFIG.endpoint,
     )

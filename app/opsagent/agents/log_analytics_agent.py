@@ -1,16 +1,10 @@
 """Log Analytics Agent for Azure Data Factory pipeline monitoring."""
 
+from dataclasses import dataclass
 from typing import Optional
 
-from agent_framework import ChatAgent
-from agent_framework.azure import AzureOpenAIChatClient
-
-from ..middleware.observability import (
-    observability_agent_middleware,
-    observability_function_middleware,
-)
-from ..prompts.log_analytics_agent import LOG_ANALYTICS_AGENT
-from ..settings import ModelConfig, resolve_model_config
+from ..factory import create_agent
+from ..settings import ModelConfig
 from ..tools.log_analytics_tools import (
     get_pipeline_run_details,
     list_failed_pipelines,
@@ -18,37 +12,48 @@ from ..tools.log_analytics_tools import (
 )
 
 
-def create_log_analytics_agent(model_config: Optional[ModelConfig] = None) -> ChatAgent:
-    """Create and return the Log Analytics agent.
+@dataclass(frozen=True)
+class LogAnalyticsAgentConfig:
+    """Configuration for the Log Analytics agent."""
 
-    Args:
-        model_config: Optional model configuration override. If None, uses
-                     singleton settings. Partial overrides are supported.
+    name: str = "log-analytics-agent"
+    description: str = "Queries Azure Data Factory pipeline execution logs"
+    deployment_name: str = ""
+    api_key: str = ""
+    endpoint: str = ""
+    instructions: str = """You are an Azure Log Analytics assistant for ADF pipeline monitoring.
 
-    Returns:
-        Configured ChatAgent instance
-    """
-    resolved = resolve_model_config(
+You can:
+- Query pipeline execution status (start time, end time, duration, status)
+- Get details for specific pipeline runs
+- List failed pipelines within a time range
+
+When responding:
+- Include timestamps in UTC format
+- Clearly indicate status: Succeeded, Failed, In Progress, Cancelled
+- For failures, include error messages when available
+
+## Output Format
+Always format your response in Markdown:
+- Use **bold** for pipeline names
+- Use tables for listing multiple pipeline runs
+- Use `code` formatting for run IDs and timestamps
+- Use ✅ for Succeeded, ❌ for Failed, ⏳ for In Progress
+"""
+
+
+CONFIG = LogAnalyticsAgentConfig()
+
+
+def create_log_analytics_agent(model_config: Optional[ModelConfig] = None):
+    """Create and return the Log Analytics agent."""
+    return create_agent(
+        name=CONFIG.name,
+        description=CONFIG.description,
+        instructions=CONFIG.instructions,
         model_config=model_config,
-        agent_config_deployment=LOG_ANALYTICS_AGENT.deployment_name,
-        agent_config_api_key=LOG_ANALYTICS_AGENT.api_key,
-        agent_config_endpoint=LOG_ANALYTICS_AGENT.endpoint,
-    )
-
-    chat_client = AzureOpenAIChatClient(
-        api_key=resolved.api_key,
-        endpoint=resolved.endpoint,
-        deployment_name=resolved.deployment_name,
-    )
-
-    return ChatAgent(
-        name=LOG_ANALYTICS_AGENT.name,
-        description=LOG_ANALYTICS_AGENT.description,
-        instructions=LOG_ANALYTICS_AGENT.instructions,
-        chat_client=chat_client,
         tools=[query_pipeline_status, get_pipeline_run_details, list_failed_pipelines],
-        middleware=[
-            observability_agent_middleware,
-            observability_function_middleware,
-        ],
+        deployment_name=CONFIG.deployment_name,
+        api_key=CONFIG.api_key,
+        endpoint=CONFIG.endpoint,
     )
