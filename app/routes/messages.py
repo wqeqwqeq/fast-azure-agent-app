@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from agent_framework._workflows._events import WorkflowOutputEvent
@@ -15,6 +15,7 @@ from ..config import get_settings
 from ..dependencies import CurrentUserDep, HistoryManagerDep
 from ..core.events import set_current_message_seq, set_current_queue
 from ..opsagent.schemas.common import MessageData, WorkflowInput
+from ..opsagent.settings import ModelConfig
 from ..opsagent.workflows.dynamic_workflow import create_dynamic_workflow
 from ..opsagent.workflows.triage_workflow import create_triage_workflow
 from ..schemas import SendMessageRequest
@@ -54,6 +55,7 @@ def format_sse_event(event_type: str, data: dict) -> str:
 async def send_message(
     conversation_id: str,
     body: SendMessageRequest,
+    request: Request,
     history: HistoryManagerDep,
     current_user: CurrentUserDep,
 ):
@@ -119,11 +121,16 @@ async def send_message(
                 set_current_queue(event_queue)
                 set_current_message_seq(user_message_seq)
 
+                # Create model config with API key from app state
+                model_config = ModelConfig(
+                    api_key=request.app.state.azure_openai_api_key
+                )
+
                 # Create fresh workflow for this request
                 if settings.dynamic_plan:
-                    workflow = create_dynamic_workflow()
+                    workflow = create_dynamic_workflow(model_config)
                 else:
-                    workflow = create_triage_workflow()
+                    workflow = create_triage_workflow(model_config)
 
                 # Convert messages to workflow input format
                 message_data = [

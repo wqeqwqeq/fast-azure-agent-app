@@ -10,6 +10,8 @@ class ClarifyAgentConfig:
     name: str = "clarify-agent"
     description: str = "Helps users refine unclear requests with polite clarification"
     deployment_name: str = ""
+    api_key: str = ""
+    endpoint: str = ""
     instructions: str = """You are a clarification agent that helps users refine their requests when queries are ambiguous or unclear.
 
 ## Your Task

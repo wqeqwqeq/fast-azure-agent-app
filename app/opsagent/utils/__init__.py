@@ -1,13 +1,19 @@
-"""Utility modules for Azure OpenAI configuration."""
+"""Utility modules for Azure OpenAI configuration.
 
-from .settings import (
-    AzureOpenAISettings,
-    get_azure_openai_settings,
-    initialize_azure_openai_settings,
+NOTE: Settings have been moved to app.opsagent.settings.
+This module re-exports for backward compatibility.
+"""
+
+from ..settings import (
+    AzOpenAIEnvSettings,
+    ModelConfig,
+    ResolvedModelConfig,
+    resolve_model_config,
 )
 
 __all__ = [
-    "AzureOpenAISettings",
-    "get_azure_openai_settings",
-    "initialize_azure_openai_settings",
+    "AzOpenAIEnvSettings",
+    "ModelConfig",
+    "ResolvedModelConfig",
+    "resolve_model_config",
 ]

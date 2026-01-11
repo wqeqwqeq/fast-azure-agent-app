@@ -10,6 +10,8 @@ class ReviewAgentConfig:
     name: str = "review-agent"
     description: str = "Reviews execution results to ensure completeness and quality of answers"
     deployment_name: str = ""
+    api_key: str = ""
+    endpoint: str = ""
     instructions: str = """You are a review agent that evaluates execution results against the original user query.
 
 ## Your Task

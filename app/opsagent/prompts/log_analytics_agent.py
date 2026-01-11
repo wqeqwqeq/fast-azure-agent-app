@@ -10,6 +10,8 @@ class LogAnalyticsAgentConfig:
     name: str = "log-analytics-agent"
     description: str = "Queries Azure Data Factory pipeline execution logs"
     deployment_name: str = ""
+    api_key: str = ""
+    endpoint: str = ""
     instructions: str = """You are an Azure Log Analytics assistant for ADF pipeline monitoring.
 
 You can:

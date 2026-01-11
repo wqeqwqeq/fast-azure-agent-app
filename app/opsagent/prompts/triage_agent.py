@@ -10,6 +10,8 @@ class TriageAgentConfig:
     name: str = "triage-agent"
     description: str = "Routes user queries to specialized IT operations agents"
     deployment_name: str = ""
+    api_key: str = ""
+    endpoint: str = ""
     instructions: str = """You are a triage agent for IT operations. Your job is to analyze the user's **LATEST question** and route it to the appropriate specialized agent(s).
 
 ## IMPORTANT: Focus on the Latest Question

@@ -1,6 +1,7 @@
 """Triage Workflow with fan-out/fan-in pattern for multi-agent execution."""
 
 from dataclasses import dataclass
+from typing import Optional
 
 from agent_framework import (
     AgentExecutor,
@@ -19,6 +20,7 @@ from typing_extensions import Never
 
 from ..schemas.common import MessageData, WorkflowInput
 from ..schemas.triage import TaskAssignment, TriageOutput
+from ..settings import ModelConfig
 
 
 # === Custom Response for Fan-In ===
@@ -200,18 +202,23 @@ def select_dispatch_or_reject(triage: TriageOutput, target_ids: list[str]) -> li
 
 
 # === Workflow Factory ===
-def create_triage_workflow():
-    """Create the triage workflow with conditional fan-out."""
+def create_triage_workflow(model_config: Optional[ModelConfig] = None):
+    """Create the triage workflow with conditional fan-out.
+
+    Args:
+        model_config: Optional model configuration override applied to all agents.
+                     If None, each agent uses singleton settings.
+    """
     from ..agents.triage_agent import create_triage_agent
     from ..agents.servicenow_agent import create_servicenow_agent
     from ..agents.log_analytics_agent import create_log_analytics_agent
     from ..agents.service_health_agent import create_service_health_agent
 
-    # Create all agents using factory functions
-    triage = create_triage_agent()
-    servicenow = create_servicenow_agent()
-    log_analytics = create_log_analytics_agent()
-    service_health = create_service_health_agent()
+    # Create all agents using factory functions with shared model config
+    triage = create_triage_agent(model_config)
+    servicenow = create_servicenow_agent(model_config)
+    log_analytics = create_log_analytics_agent(model_config)
+    service_health = create_service_health_agent(model_config)
 
     # Triage uses standard AgentExecutor (for structured output)
     triage_executor = AgentExecutor(triage, id="triage_agent")

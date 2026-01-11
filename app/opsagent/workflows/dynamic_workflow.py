@@ -10,6 +10,7 @@ This workflow implements:
 import asyncio
 from collections import defaultdict
 from dataclasses import dataclass, field
+from typing import Optional
 
 from agent_framework import (
     ChatAgent,
@@ -31,6 +32,7 @@ from ..schemas.dynamic_triage import (
 )
 from ..schemas.review import ReviewOutput
 from ..schemas.clarify import ClarifyOutput
+from ..settings import ModelConfig
 
 
 # === Internal Dataclasses for Workflow Routing ===
@@ -645,8 +647,13 @@ def _format_final_output(
 
 
 # === Workflow Factory ===
-def create_dynamic_workflow():
-    """Create the dynamic workflow with review loop."""
+def create_dynamic_workflow(model_config: Optional[ModelConfig] = None):
+    """Create the dynamic workflow with review loop.
+
+    Args:
+        model_config: Optional model configuration override applied to all agents.
+                     If None, each agent uses singleton settings.
+    """
     from ..agents.dynamic_triage_agent import (
         create_user_mode_triage_agent,
         create_review_mode_triage_agent,
@@ -657,14 +664,14 @@ def create_dynamic_workflow():
     from ..agents.log_analytics_agent import create_log_analytics_agent
     from ..agents.service_health_agent import create_service_health_agent
 
-    # Create agents - separate agents for user mode and review mode (each with its own response_format)
-    user_mode_triage_agent = create_user_mode_triage_agent()
-    review_mode_triage_agent = create_review_mode_triage_agent()
-    review_agent = create_review_agent()
-    clarify_agent = create_clarify_agent()
-    servicenow_agent = create_servicenow_agent()
-    log_analytics_agent = create_log_analytics_agent()
-    service_health_agent = create_service_health_agent()
+    # Create agents with shared model config
+    user_mode_triage_agent = create_user_mode_triage_agent(model_config)
+    review_mode_triage_agent = create_review_mode_triage_agent(model_config)
+    review_agent = create_review_agent(model_config)
+    clarify_agent = create_clarify_agent(model_config)
+    servicenow_agent = create_servicenow_agent(model_config)
+    log_analytics_agent = create_log_analytics_agent(model_config)
+    service_health_agent = create_service_health_agent(model_config)
 
     # Create executors - use two separate triage executors for user mode and review mode
     user_mode_triage = UserModeTriageExecutor(user_mode_triage_agent)

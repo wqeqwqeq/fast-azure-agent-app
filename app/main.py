@@ -19,7 +19,6 @@ from fastapi.responses import FileResponse
 from .config import get_settings
 from .infrastructure import AsyncChatHistoryManager
 from .infrastructure.keyvault import AKV
-from .opsagent.utils.settings import initialize_azure_openai_settings
 from .routes import conversations, evaluation, messages, settings, user
 
 # All secrets to pre-load at startup
@@ -53,8 +52,8 @@ async def lifespan(app: FastAPI):
     akv.load_secrets(REQUIRED_SECRETS)
     app.state.keyvault = akv
 
-    # Initialize Azure OpenAI settings with pre-loaded API key
-    initialize_azure_openai_settings(akv.get_secret("AZURE-OPENAI-API-KEY"))
+    # Store Azure OpenAI API key for injection into workflows
+    app.state.azure_openai_api_key = akv.get_secret("AZURE-OPENAI-API-KEY")
 
     # Get database credentials from pre-loaded secrets
     postgres_password = akv.get_secret("POSTGRES-ADMIN-PASSWORD")

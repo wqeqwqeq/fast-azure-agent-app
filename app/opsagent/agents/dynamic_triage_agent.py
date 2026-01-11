@@ -5,26 +5,41 @@ This agent operates in two modes:
 - Review Mode: Evaluates reviewer feedback and decides on retry strategy
 """
 
+from typing import Optional
+
 from agent_framework import ChatAgent
 from agent_framework.azure import AzureOpenAIChatClient
 
 from ..middleware.observability import observability_agent_middleware
 from ..prompts.dynamic_triage_agent import DYNAMIC_TRIAGE_AGENT
 from ..schemas.dynamic_triage import (
-    DynamicTriageUserModeOutput,
     DynamicTriageReviewModeOutput,
+    DynamicTriageUserModeOutput,
 )
-from ..utils.settings import get_azure_openai_settings
+from ..settings import ModelConfig, resolve_model_config
 
 
-def create_user_mode_triage_agent() -> ChatAgent:
-    """Create triage agent for user mode with DynamicTriageUserModeOutput response format."""
-    settings = get_azure_openai_settings()
+def create_user_mode_triage_agent(model_config: Optional[ModelConfig] = None) -> ChatAgent:
+    """Create triage agent for user mode with DynamicTriageUserModeOutput response format.
+
+    Args:
+        model_config: Optional model configuration override. If None, uses
+                     singleton settings. Partial overrides are supported.
+
+    Returns:
+        Configured ChatAgent instance for user mode
+    """
+    resolved = resolve_model_config(
+        model_config=model_config,
+        agent_config_deployment=DYNAMIC_TRIAGE_AGENT.deployment_name,
+        agent_config_api_key=DYNAMIC_TRIAGE_AGENT.api_key,
+        agent_config_endpoint=DYNAMIC_TRIAGE_AGENT.endpoint,
+    )
 
     chat_client = AzureOpenAIChatClient(
-        api_key=settings.azure_openai_api_key,
-        endpoint=settings.azure_openai_endpoint,
-        deployment_name=DYNAMIC_TRIAGE_AGENT.deployment_name or settings.azure_openai_deployment_name,
+        api_key=resolved.api_key,
+        endpoint=resolved.endpoint,
+        deployment_name=resolved.deployment_name,
     )
 
     return ChatAgent(
@@ -37,14 +52,27 @@ def create_user_mode_triage_agent() -> ChatAgent:
     )
 
 
-def create_review_mode_triage_agent() -> ChatAgent:
-    """Create triage agent for review mode with DynamicTriageReviewModeOutput response format."""
-    settings = get_azure_openai_settings()
+def create_review_mode_triage_agent(model_config: Optional[ModelConfig] = None) -> ChatAgent:
+    """Create triage agent for review mode with DynamicTriageReviewModeOutput response format.
+
+    Args:
+        model_config: Optional model configuration override. If None, uses
+                     singleton settings. Partial overrides are supported.
+
+    Returns:
+        Configured ChatAgent instance for review mode
+    """
+    resolved = resolve_model_config(
+        model_config=model_config,
+        agent_config_deployment=DYNAMIC_TRIAGE_AGENT.deployment_name,
+        agent_config_api_key=DYNAMIC_TRIAGE_AGENT.api_key,
+        agent_config_endpoint=DYNAMIC_TRIAGE_AGENT.endpoint,
+    )
 
     chat_client = AzureOpenAIChatClient(
-        api_key=settings.azure_openai_api_key,
-        endpoint=settings.azure_openai_endpoint,
-        deployment_name=DYNAMIC_TRIAGE_AGENT.deployment_name or settings.azure_openai_deployment_name,
+        api_key=resolved.api_key,
+        endpoint=resolved.endpoint,
+        deployment_name=resolved.deployment_name,
     )
 
     return ChatAgent(

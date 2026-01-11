@@ -10,6 +10,8 @@ class ServiceNowAgentConfig:
     name: str = "servicenow-agent"
     description: str = "Handles ServiceNow operations: change requests and incidents"
     deployment_name: str = ""
+    api_key: str = ""
+    endpoint: str = ""
     instructions: str = """You are a ServiceNow ITSM assistant. You help users with:
 - Change Request management (CHG tickets)
 - Incident management (INC tickets)

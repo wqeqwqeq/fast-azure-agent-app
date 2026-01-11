@@ -10,6 +10,8 @@ class ServiceHealthAgentConfig:
     name: str = "service-health-agent"
     description: str = "Monitors health status of Databricks, Snowflake, and Azure services"
     deployment_name: str = ""
+    api_key: str = ""
+    endpoint: str = ""
     instructions: str = """You are a service health monitoring assistant. You check the status of:
 - Databricks (workspace and clusters)
 - Snowflake (warehouses)
