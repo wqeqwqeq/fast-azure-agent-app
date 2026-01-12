@@ -8,7 +8,8 @@ from .conversation import (
 )
 from .evaluation import EvaluationResponse, EvaluationUpdate
 from .message import SendMessageRequest
-from .settings import ModelsResponse, SettingsResponse
+from .models import AgentsResponse, ModelsResponse
+from .settings import SettingsResponse
 from .user import UserInfo
 
 __all__ = [
@@ -26,5 +27,7 @@ __all__ = [
     "UserInfo",
     # Settings schemas
     "SettingsResponse",
+    # Model schemas
     "ModelsResponse",
+    "AgentsResponse",
 ]

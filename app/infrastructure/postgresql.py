@@ -1,5 +1,6 @@
 """Async PostgreSQL backend for chat history storage using asyncpg."""
 
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -112,7 +113,7 @@ class AsyncPostgreSQLBackend:
             conv_row = await conn.fetchrow(
                 """
                 SELECT conversation_id, user_client_id, title, model,
-                       created_at, last_modified
+                       agent_model_mapping, created_at, last_modified
                 FROM conversations
                 WHERE conversation_id = $1 AND user_client_id = $2
                 """,
@@ -149,6 +150,7 @@ class AsyncPostgreSQLBackend:
                 "messages": messages,
                 "created_at": conv_row["created_at"].isoformat(),
                 "last_modified": conv_row["last_modified"].isoformat(),
+                **({"agent_model_mapping": conv_row["agent_model_mapping"]} if conv_row["agent_model_mapping"] else {}),
             }
 
     async def save_conversation(
@@ -177,24 +179,31 @@ class AsyncPostgreSQLBackend:
             conversation.get("last_modified", datetime.now(timezone.utc).isoformat())
         )
 
+        # Handle optional agent_model_mapping field
+        agent_model_mapping = conversation.get("agent_model_mapping")
+        agent_model_mapping_json = json.dumps(agent_model_mapping) if agent_model_mapping else None
+
         async with self.pool.acquire() as conn:
             async with conn.transaction():
                 # UPSERT conversation metadata
                 await conn.execute(
                     """
                     INSERT INTO conversations
-                        (conversation_id, user_client_id, title, model, created_at, last_modified)
-                    VALUES ($1, $2, $3, $4, $5, $6)
+                        (conversation_id, user_client_id, title, model,
+                         agent_model_mapping, created_at, last_modified)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7)
                     ON CONFLICT (conversation_id)
                     DO UPDATE SET
                         title = EXCLUDED.title,
                         model = EXCLUDED.model,
+                        agent_model_mapping = EXCLUDED.agent_model_mapping,
                         last_modified = EXCLUDED.last_modified
                     """,
                     conversation_id,
                     user_id,
                     conversation["title"],
                     conversation["model"],
+                    agent_model_mapping_json,
                     created_at,
                     last_modified,
                 )

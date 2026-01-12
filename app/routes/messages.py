@@ -90,7 +90,13 @@ async def send_message(
     # Calculate message sequence number (user message index)
     user_message_seq = len(convo["messages"])
 
-    # Append user message
+    # Resolve workflow_model: request > conversation.model > fallback
+    workflow_model = body.workflow_model or convo.get("model") or "gpt-4.1"
+
+    # Get agent model mapping from request (already validated by Pydantic)
+    agent_model_mapping = body.agent_model_mapping
+
+    # Append user message (model selection stored at conversation level, not per-message)
     now = datetime.now(timezone.utc).isoformat()
     convo["messages"].append({
         "role": "user",
@@ -123,16 +129,11 @@ async def send_message(
                 # Get model registry from app state
                 registry = request.app.state.model_registry
 
-                # TODO: Parse workflow_model and agent_mapping from request body
-                # workflow_model = getattr(body, 'workflow_model', None) or "gpt-4.1"
-                # agent_mapping = getattr(body, 'agent_mapping', None)
-                workflow_model = "gpt-4.1"
-
-                # Create fresh workflow for this request
+                # Create fresh workflow for this request with resolved model config
                 if settings.dynamic_plan:
-                    workflow = create_dynamic_workflow(registry, workflow_model)
+                    workflow = create_dynamic_workflow(registry, workflow_model, agent_model_mapping)
                 else:
-                    workflow = create_triage_workflow(registry, workflow_model)
+                    workflow = create_triage_workflow(registry, workflow_model, agent_model_mapping)
 
                 # Convert messages to workflow input format
                 message_data = [
@@ -203,6 +204,11 @@ async def send_message(
 
         # Update last_modified
         convo["last_modified"] = assistant_time
+
+        # Update conversation with user's model selection (remembers for next time)
+        convo["model"] = workflow_model
+        if agent_model_mapping:
+            convo["agent_model_mapping"] = agent_model_mapping.model_dump(exclude_none=True)
 
         # Save to storage
         await history.save_conversation(conversation_id, user_id, convo)

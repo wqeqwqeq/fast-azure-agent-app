@@ -10,9 +10,10 @@ This document records the refactoring journey from a verbose, over-engineered st
 | 2 | 60ce009 | Inline prompt configs into agent files | -7 prompt files, +factory.py |
 | 3 | 8bf7691 | Replace ModelConfig with ModelRegistry | -settings.py, +model_registry.py |
 | 4 | 8479a63 | Remove empty utils/ directories | -2 dirs |
-| 5 | (current) | Factory function for model resolver | refactor |
+| 5 | - | Factory function for model resolver | refactor |
+| 6 | (current) | Model selection API with conversation-level storage | +routes/models.py, +schemas/models.py |
 
-**Net result**: Deleted `prompts/`, `utils/`, `settings.py`. Added `model_registry.py`, `factory.py`.
+**Net result**: Deleted `prompts/`, `utils/`, `settings.py`. Added `model_registry.py`, `factory.py`, `routes/models.py`, `schemas/models.py`.
 
 ---
 
@@ -106,7 +107,7 @@ After previous refactors, `utils/` directories were empty.
 
 ---
 
-## Phase 5: Factory Function for Model Resolver (current)
+## Phase 5: Factory Function for Model Resolver
 
 ### Decision: Use closure factory instead of method
 
@@ -158,29 +159,116 @@ service_health_agent = create_service_health_agent(registry, model_for("service_
 
 ---
 
+## Phase 6: Model Selection API (current)
+
+### Decision: Add API endpoints with conversation-level model storage
+
+**Goal:** Enable frontend to select workflow-level and agent-specific models via API. Store user's last selection in `conversations` table so dropdown remembers their choice.
+
+**Design:**
+- `conversations.model` = workflow model（已存在，直接复用）
+- `conversations.agent_mapping` = per-agent overrides（只需新增这一列）
+- `messages` table: Keep clean, no model fields
+
+**New API Endpoints:**
+```
+GET  /api/models  → ["gpt-4.1", "gpt-4.1-mini"]
+GET  /api/agents  → ["triage", "servicenow", "log_analytics", ...]
+POST /api/conversations/{id}/messages
+     body: { message, workflow_model?, agent_mapping? }
+```
+
+**Frontend UX Flow:**
+```
+┌─────────────────────────────────────────┐
+│  Workflow Model: [gpt-4.1-mini ▼]       │  ← GET /api/models
+├─────────────────────────────────────────┤
+│  ▼ Agent-specific overrides (optional)  │  ← GET /api/agents
+│    ├─ triage: [inherit ▼]               │
+│    ├─ servicenow: [gpt-4.1 ▼]           │  ← Each uses GET /api/models
+│    └─ ...                               │
+└─────────────────────────────────────────┘
+```
+
+**Database Schema:**
+```sql
+-- conversations table (model = workflow model)
+CREATE TABLE conversations (
+    conversation_id VARCHAR(50) PRIMARY KEY,
+    user_client_id VARCHAR(255) NOT NULL,
+    title TEXT NOT NULL,
+    model VARCHAR(100) NOT NULL,           -- workflow model (existing)
+    agent_mapping JSONB DEFAULT NULL,      -- NEW: per-agent overrides
+    created_at TIMESTAMPTZ NOT NULL,
+    last_modified TIMESTAMPTZ NOT NULL
+);
+
+-- messages table stays clean
+CREATE TABLE messages (
+    message_id SERIAL PRIMARY KEY,
+    conversation_id VARCHAR(50) REFERENCES conversations(conversation_id),
+    sequence_number INTEGER NOT NULL,
+    role VARCHAR(20) NOT NULL,
+    content TEXT NOT NULL,
+    timestamp TIMESTAMPTZ NOT NULL,
+    is_satisfy BOOLEAN DEFAULT NULL,
+    comment TEXT DEFAULT NULL
+);
+```
+
+**Resolution Priority:**
+```python
+# model IS the workflow model - no separate field needed
+workflow_model = body.workflow_model or convo.get("model") or "gpt-4.1"
+```
+
+**Files Added:**
+- `app/routes/models.py` - GET /models, GET /agents endpoints
+- `app/schemas/models.py` - ModelsResponse, AgentsResponse, AgentModelMappingRequest
+
+**Files Modified:**
+- `app/schemas/message.py` - SendMessageRequest gains workflow_model, agent_mapping
+- `app/routes/messages.py` - Uses request model params, updates convo["model"]
+- `app/infrastructure/postgresql.py` - Conversations queries include agent_mapping
+- `app/infrastructure/redis.py` - Conversation metadata caching includes agent_mapping
+- `deployment/init.sql` - Adds agent_mapping column to conversations table
+
+**Result:** Model selection API with user preference persistence at conversation level.
+
+---
+
 ## Final Structure
 
 ```
-app/opsagent/
-├── __init__.py
-├── factory.py              # create_agent() - shared ChatAgent creation
-├── model_registry.py       # ModelRegistry, ModelName, AgentModelMapping, create_model_resolver()
-├── agents/
-│   ├── __init__.py
-│   ├── clarify_agent.py         # ClarifyAgentConfig + create_clarify_agent()
-│   ├── dynamic_triage_agent.py
-│   ├── log_analytics_agent.py
-│   ├── review_agent.py
-│   ├── service_health_agent.py
-│   ├── servicenow_agent.py
-│   └── triage_agent.py
-├── middleware/
-│   └── observability.py
-├── schemas/                # Pydantic models for structured output
-├── tools/                  # Tool functions for agents
-└── workflows/
-    ├── dynamic_workflow.py
-    └── triage_workflow.py
+app/
+├── routes/
+│   ├── models.py           # GET /models, GET /agents
+│   ├── messages.py         # POST /conversations/{id}/messages (with model params)
+│   └── ...
+├── schemas/
+│   ├── models.py           # ModelsResponse, AgentsResponse, AgentModelMappingRequest
+│   ├── message.py          # SendMessageRequest (with workflow_model, agent_mapping)
+│   └── ...
+└── opsagent/
+    ├── __init__.py
+    ├── factory.py              # create_agent() - shared ChatAgent creation
+    ├── model_registry.py       # ModelRegistry, ModelName, AgentModelMapping, create_model_resolver()
+    ├── agents/
+    │   ├── __init__.py
+    │   ├── clarify_agent.py         # ClarifyAgentConfig + create_clarify_agent()
+    │   ├── dynamic_triage_agent.py
+    │   ├── log_analytics_agent.py
+    │   ├── review_agent.py
+    │   ├── service_health_agent.py
+    │   ├── servicenow_agent.py
+    │   └── triage_agent.py
+    ├── middleware/
+    │   └── observability.py
+    ├── schemas/                # Pydantic models for structured output
+    ├── tools/                  # Tool functions for agents
+    └── workflows/
+        ├── dynamic_workflow.py
+        └── triage_workflow.py
 ```
 
 **Deleted:**
@@ -211,6 +299,7 @@ When multiple calls share the same context, capture it in a closure.
 
 ## Usage Examples
 
+### Backend (Workflow Creation)
 ```python
 # Mode 1: Local dev (uses .env)
 workflow = create_triage_workflow()
@@ -227,6 +316,27 @@ workflow = create_triage_workflow(
 )
 ```
 
+### Frontend API Usage
+```javascript
+// 1. Get available models for dropdown
+const models = await fetch('/api/models').then(r => r.json());
+// { models: ["gpt-4.1", "gpt-4.1-mini"] }
+
+// 2. Get agent keys for per-agent override UI
+const agents = await fetch('/api/agents').then(r => r.json());
+// { agents: ["triage", "servicenow", "log_analytics", ...] }
+
+// 3. Send message with model selection
+await fetch(`/api/conversations/${id}/messages`, {
+  method: 'POST',
+  body: JSON.stringify({
+    message: "Check ServiceNow incidents",
+    workflow_model: "gpt-4.1-mini",
+    agent_mapping: { servicenow: "gpt-4.1" }  // optional
+  })
+});
+```
+
 ---
 
 ## Lessons Learned
@@ -238,3 +348,5 @@ workflow = create_triage_workflow(
 3. **Delete code aggressively** - Every deleted file is one less thing to maintain. The lean structure is easier to understand and modify.
 
 4. **Type hints as documentation** - `ModelName` literal type makes valid values obvious without reading docs.
+
+5. **Separate concerns clearly** - Messages store content, conversations store preferences. Initially considered per-message model tracking, but simplified to conversation-level storage since the goal is just remembering user's selection.

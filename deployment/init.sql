@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS conversations (
     user_client_id VARCHAR(255) NOT NULL,
     title TEXT NOT NULL,
     model VARCHAR(100) NOT NULL,
+    agent_model_mapping JSONB DEFAULT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_modified TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

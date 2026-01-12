@@ -197,6 +197,7 @@ class AsyncRedisBackend:
                         "messages": [json.loads(msg) for msg in messages_json],
                         "created_at": meta["created_at"],
                         "last_modified": meta["last_modified"],
+                        **({"agent_model_mapping": meta["agent_model_mapping"]} if meta.get("agent_model_mapping") else {}),
                     }
         except redis.RedisError as e:
             logger.warning(f"Redis error in get_conversation_messages: {e}")
@@ -277,6 +278,7 @@ class AsyncRedisBackend:
                     "model": conversation["model"],
                     "created_at": conversation["created_at"],
                     "last_modified": conversation["last_modified"],
+                    **({"agent_model_mapping": conversation["agent_model_mapping"]} if conversation.get("agent_model_mapping") else {}),
                 })
                 score = datetime.fromisoformat(conversation["last_modified"]).timestamp()
                 pipeline.zadd(conv_key, {json_meta: score})

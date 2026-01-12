@@ -45,12 +45,6 @@ class Settings(BaseSettings):
     # Default model
     default_model: str = "gpt-4.1-mini"
 
-    # Available models
-    available_models: list[str] = [
-        "gpt-4.1",
-        "gpt-4.1-mini",
-    ]
-
     # Local testing credentials (for local_psql/local_redis modes)
     local_test_client_id: str = "00000000-0000-0000-0000-000000000001"
     local_test_username: str = "local_user"

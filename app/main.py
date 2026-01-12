@@ -20,7 +20,7 @@ from .config import get_settings
 from .infrastructure import AsyncChatHistoryManager
 from .infrastructure.keyvault import AKV
 from .opsagent.model_registry import ModelRegistry
-from .routes import conversations, evaluation, messages, settings, user
+from .routes import conversations, evaluation, messages, models, settings, user
 
 # All secrets to pre-load at startup
 REQUIRED_SECRETS = [
@@ -125,6 +125,7 @@ def create_app() -> FastAPI:
 
     # Include routers
     app.include_router(user.router, prefix="/api", tags=["user"])
+    app.include_router(models.router, prefix="/api", tags=["models"])
     app.include_router(settings.router, prefix="/api", tags=["settings"])
     app.include_router(conversations.router, prefix="/api", tags=["conversations"])
     app.include_router(messages.router, prefix="/api", tags=["messages"])
