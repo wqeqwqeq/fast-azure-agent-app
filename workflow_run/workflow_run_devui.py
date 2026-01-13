@@ -2,12 +2,11 @@ import logging
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "app"))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from agent_framework.devui import serve
 
-from opsagent.workflows.triage_workflow import create_triage_workflow
-from opsagent.workflows.dynamic_workflow import create_dynamic_workflow
+from app.opsagent.workflows.dynamic_workflow import create_dynamic_workflow
 
 
 def main():
