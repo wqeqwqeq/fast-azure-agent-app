@@ -118,11 +118,47 @@ function appendThinkingEvent(message) {
     chatCanvas.scrollTop = chatCanvas.scrollHeight;
 }
 
+// Append streaming text to the current assistant message
+function appendStreamingText(text) {
+    const thinkingMsg = document.querySelector('.thinking-message');
+    if (!thinkingMsg) return;
+
+    // Find or create streaming content container
+    let streamingContent = thinkingMsg.querySelector('.streaming-content');
+    if (!streamingContent) {
+        // Hide thinking indicator dots when streaming starts
+        const thinkingDots = thinkingMsg.querySelector('.thinking-dots');
+        if (thinkingDots) thinkingDots.style.display = 'none';
+
+        // Update thinking text
+        const thinkingText = thinkingMsg.querySelector('.thinking-text');
+        if (thinkingText) thinkingText.textContent = 'Responding';
+
+        streamingContent = document.createElement('div');
+        streamingContent.className = 'streaming-content message-content';
+        thinkingMsg.appendChild(streamingContent);
+    }
+
+    // Append text and re-render markdown
+    const currentText = streamingContent.getAttribute('data-raw-text') || '';
+    const newText = currentText + text;
+    streamingContent.setAttribute('data-raw-text', newText);
+    streamingContent.innerHTML = DOMPurify.sanitize(marked.parse(newText));
+
+    // Scroll to bottom
+    const chatCanvas = document.getElementById('chat-canvas');
+    chatCanvas.scrollTop = chatCanvas.scrollHeight;
+}
+
 // Replace thinking indicator with actual response, keeping collapsed thinking
 function replaceThinkingWithResponse(content, seq) {
     const thinkingMsg = document.querySelector('.thinking-message');
     if (thinkingMsg) {
         thinkingMsg.classList.remove('thinking-message');
+
+        // Check if we already have streamed content
+        const streamingContent = thinkingMsg.querySelector('.streaming-content');
+        const hasStreamedContent = streamingContent && streamingContent.getAttribute('data-raw-text');
 
         // Keep the collapsed thinking indicator if there were events
         const thinkingCollapsed = currentThinkingEvents.length > 0 ? `
@@ -140,12 +176,25 @@ function replaceThinkingWithResponse(content, seq) {
             </div>
         ` : '';
 
-        thinkingMsg.innerHTML = `
-            <div class="message-role">Assistant</div>
-            ${thinkingCollapsed}
-            <div class="message-content">${DOMPurify.sanitize(marked.parse(content))}</div>
-            ${renderEvaluationButtons(seq)}
-        `;
+        if (hasStreamedContent) {
+            // We already streamed the content - just finalize the UI
+            // Use the streamed content instead of the final content
+            const streamedText = streamingContent.getAttribute('data-raw-text');
+            thinkingMsg.innerHTML = `
+                <div class="message-role">Assistant</div>
+                ${thinkingCollapsed}
+                <div class="message-content">${DOMPurify.sanitize(marked.parse(streamedText))}</div>
+                ${renderEvaluationButtons(seq)}
+            `;
+        } else {
+            // No streaming happened - use the final content
+            thinkingMsg.innerHTML = `
+                <div class="message-role">Assistant</div>
+                ${thinkingCollapsed}
+                <div class="message-content">${DOMPurify.sanitize(marked.parse(content))}</div>
+                ${renderEvaluationButtons(seq)}
+            `;
+        }
 
         // Attach evaluation handlers for the new buttons
         attachEvaluationHandlers();

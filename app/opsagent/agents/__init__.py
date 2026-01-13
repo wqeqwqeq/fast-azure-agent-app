@@ -9,6 +9,7 @@ from .log_analytics_agent import create_log_analytics_agent
 from .review_agent import create_review_agent
 from .service_health_agent import create_service_health_agent
 from .servicenow_agent import create_servicenow_agent
+from .summary_agent import create_summary_agent
 from .triage_agent import create_triage_agent
 
 __all__ = [
@@ -18,6 +19,7 @@ __all__ = [
     "create_review_mode_triage_agent",
     "create_service_health_agent",
     "create_servicenow_agent",
+    "create_summary_agent",
     "create_triage_agent",
     "create_user_mode_triage_agent",
 ]

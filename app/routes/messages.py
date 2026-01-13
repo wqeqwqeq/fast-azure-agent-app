@@ -9,7 +9,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from agent_framework._workflows._events import WorkflowOutputEvent
+from agent_framework._workflows._events import AgentRunUpdateEvent, WorkflowOutputEvent
 
 from ..config import get_settings
 from ..dependencies import CurrentUserDep, HistoryManagerDep
@@ -135,6 +135,13 @@ async def send_message(
                 else:
                     workflow = create_triage_workflow(registry, workflow_model, agent_model_mapping)
 
+                # Auto-detect streaming executors from workflow (those with output_response=True)
+                streaming_executor_ids = {
+                    executor_id
+                    for executor_id, executor in workflow.executors.items()
+                    if getattr(executor, 'output_response', False)
+                }
+
                 # Convert messages to workflow input format
                 message_data = [
                     MessageData(role=msg["role"], text=msg["content"])
@@ -145,10 +152,28 @@ async def send_message(
                 # Run workflow with streaming
                 # Middleware events (function_start/end, agent events) are emitted
                 # directly to the queue via observability middleware.
-                # We only capture WorkflowOutputEvent for the final response.
+                # AgentRunUpdateEvent contains streaming text from summary agent.
+                # WorkflowOutputEvent contains the final complete response.
                 async for event in workflow.run_stream(input_data):
-                    if isinstance(event, WorkflowOutputEvent):
-                        final_output = event.data
+                    if isinstance(event, AgentRunUpdateEvent):
+                        # Stream text updates only from executors with output_response=True
+                        if event.executor_id in streaming_executor_ids:
+                            update_text = event.data.text if event.data else ""
+                            if update_text:
+                                await event_queue.put(format_sse_event("stream", {
+                                    "type": "stream",
+                                    "executor_id": event.executor_id,
+                                    "text": update_text,
+                                    "seq": user_message_seq,
+                                }))
+                                # Small delay for visible streaming effect (non-blocking)
+                                await asyncio.sleep(0.005)
+                    elif isinstance(event, WorkflowOutputEvent):
+                        # Handle both string output and AgentRunResponse object
+                        if hasattr(event.data, 'text'):
+                            final_output = event.data.text
+                        else:
+                            final_output = event.data
 
             except Exception as e:
                 logger.error(f"Workflow execution failed: {e}")
@@ -173,6 +198,7 @@ async def send_message(
 
         # Yield events from queue as they arrive
         # These are middleware events (function_start/end, agent_invoked/finished)
+        # AND stream events from summary agent
         try:
             while True:
                 event = await event_queue.get()

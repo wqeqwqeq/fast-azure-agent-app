@@ -95,6 +95,7 @@ class AgentModelMapping(BaseModel):
     clarify: Optional[ModelName] = None
     dynamic_triage_user: Optional[ModelName] = None
     dynamic_triage_review: Optional[ModelName] = None
+    summary: Optional[ModelName] = None
 
     def get(self, agent_key: str) -> Optional[str]:
         """Get model name for agent, None if not specified."""

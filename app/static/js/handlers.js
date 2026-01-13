@@ -218,6 +218,12 @@ async function handleSendMessage() {
             thinking: (data) => {
                 appendThinkingEvent(data);
             },
+            stream: (data) => {
+                // Handle streaming text from summary agent
+                if (data.text) {
+                    appendStreamingText(data.text);
+                }
+            },
             done: () => {
                 // Stream complete
             }

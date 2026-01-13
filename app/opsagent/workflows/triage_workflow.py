@@ -21,6 +21,7 @@ from typing_extensions import Never
 from ..agents.log_analytics_agent import create_log_analytics_agent
 from ..agents.service_health_agent import create_service_health_agent
 from ..agents.servicenow_agent import create_servicenow_agent
+from ..agents.summary_agent import create_summary_agent
 from ..agents.triage_agent import create_triage_agent
 from ..model_registry import AgentModelMapping, ModelName, ModelRegistry, create_model_resolver
 from ..schemas.common import WorkflowInput
@@ -169,14 +170,14 @@ class FilteredAgentExecutor(Executor):
 
 # === Aggregator for Fan-In ===
 class AggregateResponses(Executor):
-    """Aggregate responses from specialized agents."""
+    """Aggregate responses from specialized agents and send to summary agent."""
 
     def __init__(self, id: str = "aggregate_responses"):
         super().__init__(id=id)
 
     @handler
     async def aggregate(
-        self, results: list[AgentResponse], ctx: WorkflowContext[Never, str]
+        self, results: list[AgentResponse], ctx: WorkflowContext[str]
     ) -> None:
         # Build consolidated response, filtering out empty responses
         sections = []
@@ -188,7 +189,8 @@ class AggregateResponses(Executor):
                 sections.append(f"## {agent_name}\n{r.text}")
 
         consolidated = "\n\n---\n\n".join(sections)
-        await ctx.yield_output(consolidated)
+        # Send to summary agent for streaming output
+        await ctx.send_message(consolidated)
 
 
 # === Selection Function for Dispatch vs Reject ===
@@ -236,6 +238,7 @@ def create_triage_workflow(
         servicenow = create_servicenow_agent()
         log_analytics = create_log_analytics_agent()
         service_health = create_service_health_agent()
+        summary = create_summary_agent()
     else:
         # Mode 2 & 3: registry with model resolution
         if workflow_model is None:
@@ -245,6 +248,7 @@ def create_triage_workflow(
         servicenow = create_servicenow_agent(registry, model_for("servicenow"))
         log_analytics = create_log_analytics_agent(registry, model_for("log_analytics"))
         service_health = create_service_health_agent(registry, model_for("service_health"))
+        summary = create_summary_agent(registry, model_for("summary"))
 
     # Triage uses standard AgentExecutor (for structured output)
     triage_executor = AgentExecutor(triage, id="triage_agent")
@@ -264,6 +268,9 @@ def create_triage_workflow(
     )
 
     aggregator = AggregateResponses()
+
+    # Summary agent uses framework AgentExecutor (auto-supports streaming)
+    summary_executor = AgentExecutor(summary, id="summary_agent", output_response=True)
 
     # Build workflow
     workflow = (
@@ -290,6 +297,8 @@ def create_triage_workflow(
             [servicenow_executor, log_analytics_executor, service_health_executor],
             aggregator,
         )
+        # Aggregator sends to summary agent for streaming output
+        .add_edge(aggregator, summary_executor)
         .build()
     )
 
