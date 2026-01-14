@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     # UI settings
     show_func_result: bool = True
 
+    # Observability settings
+    tracing_backend: str = "appinsights"  # "disabled", "local", "appinsights"
+    local_otlp_endpoint: str = "http://localhost:4317"
+    enable_sensitive_data: bool = True  # Enable to log prompts/responses in traces
+
     # Default model
     default_model: str = "gpt-4.1-mini"
 

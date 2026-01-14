@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from .config import get_settings
-from .infrastructure import AsyncChatHistoryManager
+from .infrastructure import AsyncChatHistoryManager, configure_tracing
 from .infrastructure.keyvault import AKV
 from .opsagent.model_registry import ModelRegistry
 from .routes import conversations, evaluation, messages, models, settings, user
@@ -52,6 +52,14 @@ async def lifespan(app: FastAPI):
     akv = AKV(vault_name=app_settings.key_vault_name)
     akv.load_secrets(REQUIRED_SECRETS)
     app.state.keyvault = akv
+
+    # Configure tracing
+    configure_tracing(
+        backend=app_settings.tracing_backend,
+        appinsights_connection_string=akv.get_secret("APPLICATIONINSIGHTS-CONNECTION-STRING"),
+        otlp_endpoint=app_settings.local_otlp_endpoint,
+        enable_sensitive_data=app_settings.enable_sensitive_data,
+    )
 
     # Create ModelRegistry and store in app.state
     # This loads all required model secrets at startup
