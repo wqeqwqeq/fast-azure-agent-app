@@ -4,7 +4,7 @@ This workflow implements:
 - Dynamic planning with step-based execution (sequential/parallel/mixed)
 - Review mechanism to ensure answer completeness
 - Clarify mechanism for ambiguous queries
-- Maximum one review retry to avoid infinite loops
+- Maximum iterations controlled via WorkflowBuilder
 """
 
 import asyncio
@@ -23,25 +23,22 @@ from agent_framework import (
     handler,
 )
 from typing_extensions import Never
+from agent_framework._workflows._events import AgentRunUpdateEvent
 
 from ..agents.clarify_agent import create_clarify_agent
-from ..agents.dynamic_triage_agent import (
-    create_review_mode_triage_agent,
-    create_user_mode_triage_agent,
-)
 from ..agents.log_analytics_agent import create_log_analytics_agent
+from ..agents.plan_agent import create_plan_agent
+from ..agents.replan_agent import create_replan_agent
 from ..agents.review_agent import create_review_agent
 from ..agents.service_health_agent import create_service_health_agent
 from ..agents.servicenow_agent import create_servicenow_agent
+from ..agents.summary_agent import create_summary_agent
 from ..model_registry import AgentModelMapping, ModelName, ModelRegistry, create_model_resolver
 from ..schemas.clarify import ClarifyOutput
 from ..schemas.common import WorkflowInput
-from ..schemas.dynamic_triage import (
-    DynamicTriagePlanStep,
-    DynamicTriageReviewModeOutput,
-    DynamicTriageUserModeOutput,
-)
 from ..schemas.review import ReviewOutput
+from ..schemas.triage_plan import PlanStep, TriagePlanOutput
+from ..schemas.triage_replan import TriageReplanOutput
 
 
 # === Internal Dataclasses for Workflow Routing ===
@@ -55,52 +52,40 @@ class ExecutionResult:
 
 
 @dataclass
-class StepResults:
-    """Results from all steps of execution."""
-
-    results: dict[int, list[ExecutionResult]] = field(default_factory=dict)
-
-
-@dataclass
-class ReviewRequest:
-    """Request for review agent."""
-
-    execution_results: dict[int, list[ExecutionResult]]
-    is_retry: bool
-
-
-@dataclass
-class ReviewDecision:
-    """Decision from review agent."""
-
-    is_complete: bool
-    summary: str
-    missing_aspects: list[str]
-    suggested_approach: str
-    confidence: float
-    execution_results: dict[int, list[ExecutionResult]]
-
-
-# === Request Types (must be defined before executors that use them) ===
-@dataclass
-class UserModeRequest:
-    """Request to triage agent in user mode."""
+class PlanRequest:
+    """Request to triage in plan mode (initial query)."""
 
     messages: list[ChatMessage]
 
 
 @dataclass
-class ReviewModeRequest:
-    """Request to triage agent in review mode."""
+class ReplanRequest:
+    """Request to triage in replan mode (after review)."""
 
-    review_feedback: ReviewDecision
+    original_query: str
     previous_results: dict[int, list[ExecutionResult]]
+    missing_aspects: list[str]
+    suggested_approach: str
+
+
+@dataclass
+class ReviewRequest:
+    """Request for review executor."""
+
+    execution_results: dict[int, list[ExecutionResult]]
+
+
+@dataclass
+class StreamingRequest:
+    """Request for streaming summary output."""
+
+    execution_results: dict[int, list[ExecutionResult]]
 
 
 # === Input Processing ===
 @executor(id="store_query")
 async def store_query(
-    input: WorkflowInput, ctx: WorkflowContext[UserModeRequest]
+    input: WorkflowInput, ctx: WorkflowContext[PlanRequest]
 ) -> None:
     """Store conversation history and prepare for triage."""
     # Handle both input modes: query (DevUI) or messages (Flask)
@@ -126,118 +111,108 @@ async def store_query(
             break
     await ctx.set_shared_state("original_query", latest_query)
 
-    # Initialize retry tracking
+    # Initialize retry flag
     await ctx.set_shared_state("is_retry", False)
-    await ctx.set_shared_state("retry_count", 0)
 
-    # Send to triage in user mode
-    await ctx.send_message(UserModeRequest(messages=chat_messages))
+    # Send to triage in plan mode
+    await ctx.send_message(PlanRequest(messages=chat_messages))
 
 
-# === User Mode Triage Executor ===
-class UserModeTriageExecutor(Executor):
-    """Triage executor for initial user queries."""
+# === Triage Executor (Plan + Replan modes) ===
+class TriageExecutor(Executor):
+    """Unified triage executor handling both plan and replan modes."""
 
-    def __init__(self, agent: ChatAgent, id: str = "user_mode_triage"):
+    def __init__(
+        self,
+        plan_agent: ChatAgent,
+        replan_agent: ChatAgent,
+        id: str = "triage",
+    ):
         super().__init__(id=id)
-        self._agent = agent
+        self._plan_agent = plan_agent
+        self._replan_agent = replan_agent
 
     @handler
-    async def handle(
-        self, request: UserModeRequest, ctx: WorkflowContext[DynamicTriageUserModeOutput]
+    async def handle_plan(
+        self, request: PlanRequest, ctx: WorkflowContext[TriagePlanOutput]
     ) -> None:
-        """Process user query and generate execution plan."""
-        prompt = self._build_prompt(request.messages)
+        """Process initial user query and generate execution plan."""
+        prompt = self._build_plan_prompt(request.messages)
 
-        response = await self._agent.run(
+        response = await self._plan_agent.run(
             messages=[ChatMessage(Role.USER, text=prompt)]
         )
 
-        # Parse response as DynamicTriageUserModeOutput
-        output = DynamicTriageUserModeOutput.model_validate_json(response.text)
+        output = TriagePlanOutput.model_validate_json(response.text)
+
+        # Store plan for later reference
+        await ctx.set_shared_state("current_plan", output.plan)
 
         await ctx.send_message(output)
 
-    def _build_prompt(self, messages: list[ChatMessage]) -> str:
-        """Build prompt for user mode triage."""
+    @handler
+    async def handle_replan(
+        self, request: ReplanRequest, ctx: WorkflowContext[TriageReplanOutput]
+    ) -> None:
+        """Process review feedback and decide on retry strategy."""
+        prompt = self._build_replan_prompt(request)
+
+        response = await self._replan_agent.run(
+            messages=[ChatMessage(Role.USER, text=prompt)]
+        )
+
+        output = TriageReplanOutput.model_validate_json(response.text)
+
+        # If retrying, mark as retry
+        if output.action == "retry":
+            await ctx.set_shared_state("is_retry", True)
+
+        await ctx.send_message(output)
+
+    def _build_plan_prompt(self, messages: list[ChatMessage]) -> str:
+        """Build prompt for plan mode."""
         history = "\n".join(
             f"[{msg.role.value}]: {msg.text}" for msg in messages
         )
-        return f"""## Mode: USER_MODE
-
-Analyze this conversation and create an execution plan.
+        return f"""Analyze this conversation and create an execution plan.
 
 ## Conversation History
 {history}
 
 ## Instructions
-Output a JSON object with DynamicTriageUserModeOutput schema:
-- should_reject: bool
-- reject_reason: str (if rejecting)
-- clarify: bool (if need clarification)
+Output a JSON object with the following schema:
+- action: "plan" | "clarify" | "reject"
+- reject_reason: string (if clarify or reject)
 - plan: list of {{step, agent, question}}
-- plan_reason: str
+- plan_reason: string
 
 Remember: same step number = parallel, different step numbers = sequential."""
 
-
-# === Review Mode Triage Executor ===
-class ReviewModeTriageExecutor(Executor):
-    """Triage executor for processing reviewer feedback."""
-
-    def __init__(self, agent: ChatAgent, id: str = "review_mode_triage"):
-        super().__init__(id=id)
-        self._agent = agent
-
-    @handler
-    async def handle(
-        self, request: ReviewModeRequest, ctx: WorkflowContext[DynamicTriageReviewModeOutput]
-    ) -> None:
-        """Process reviewer feedback and decide on retry strategy."""
-        original_query = await ctx.get_shared_state("original_query")
-        prompt = self._build_prompt(request, original_query)
-
-        response = await self._agent.run(
-            messages=[ChatMessage(Role.USER, text=prompt)]
-        )
-
-        # Parse response as DynamicTriageReviewModeOutput
-        output = DynamicTriageReviewModeOutput.model_validate_json(response.text)
-
-        await ctx.send_message(output)
-
-    def _build_prompt(self, request: ReviewModeRequest, original_query: str) -> str:
-        """Build prompt for review mode triage."""
-        # Format execution results
+    def _build_replan_prompt(self, request: ReplanRequest) -> str:
+        """Build prompt for replan mode."""
         results_str = self._format_execution_results(request.previous_results)
 
-        # Format review feedback
-        feedback = request.review_feedback
-        feedback_str = f"""- Missing aspects: {feedback.missing_aspects}
-- Suggested approach: {feedback.suggested_approach}
-- Confidence: {feedback.confidence}"""
-
-        return f"""## Mode: REVIEW_MODE
-
-The review agent found the following gaps in the response.
+        return f"""The review agent found gaps in the response. Decide how to proceed.
 
 ## Original Query
-{original_query}
+{request.original_query}
 
 ## Previous Execution Results
 {results_str}
 
 ## Review Feedback
-{feedback_str}
+- Missing aspects: {request.missing_aspects}
+- Suggested approach: {request.suggested_approach}
 
 ## Instructions
-Decide whether to accept or reject this review feedback.
-Output a JSON object with DynamicTriageReviewModeOutput schema:
-- accept_review: bool
-- new_plan: list of {{step, agent, question}} (if accepting)
-- rejection_reason: str (if rejecting)
+Decide how to proceed: retry with new plan, request clarification, or reject feedback.
+Output a JSON object:
+- action: "retry" | "clarify" | "reject"
+- new_plan: list of {{step, agent, question}} (if action is "retry")
+- rejection_reason: string (if action is "reject")
+- clarification_reason: string (if action is "clarify")
 
-Be critical - only accept if the gap is genuine and addressable."""
+Be critical - only retry if the gap is genuine and addressable by agents."""
 
     def _format_execution_results(
         self, results: dict[int, list[ExecutionResult]]
@@ -254,38 +229,38 @@ Be critical - only accept if the gap is genuine and addressable."""
         return "\n".join(parts) if parts else "(No results)"
 
 
-# === Routing After User Mode Triage ===
-@executor(id="route_user_triage")
-async def route_user_triage(
-    triage: DynamicTriageUserModeOutput, ctx: WorkflowContext[DynamicTriageUserModeOutput]
-) -> None:
-    """Route based on user mode triage result."""
-    # Store plan for orchestrator
-    await ctx.set_shared_state("current_plan", triage.plan)
-    await ctx.send_message(triage)
-
-
-def select_user_triage_path(
-    triage: DynamicTriageUserModeOutput, target_ids: list[str]
+# === Unified Triage Routing ===
+def select_triage_path(
+    triage: TriagePlanOutput | TriageReplanOutput, target_ids: list[str]
 ) -> list[str]:
-    """Select path after user mode triage.
+    """Select path after triage (handles both plan and replan outputs).
 
-    target_ids order: [reject_query, clarify_executor, orchestrator]
+    target_ids order: [clarify_executor, reject_query, orchestrator, streaming_summary]
     """
-    reject_id, clarify_id, orchestrator_id = target_ids
+    clarify_id, reject_id, orchestrator_id, streaming_id = target_ids
 
-    if triage.should_reject:
-        if triage.clarify:
+    if isinstance(triage, TriagePlanOutput):
+        # Plan mode routing
+        if triage.action == "clarify":
             return [clarify_id]
-        return [reject_id]
-
-    return [orchestrator_id]
+        elif triage.action == "reject":
+            return [reject_id]
+        else:  # action == "plan"
+            return [orchestrator_id]
+    else:
+        # Replan mode routing (TriageReplanOutput)
+        if triage.action == "retry" and triage.new_plan:
+            return [orchestrator_id]
+        elif triage.action == "clarify":
+            return [clarify_id]
+        else:  # action == "reject" or no valid plan
+            return [streaming_id]
 
 
 # === Reject Handler ===
 @executor(id="reject_query")
 async def reject_query(
-    triage: DynamicTriageUserModeOutput, ctx: WorkflowContext[Never, str]
+    triage: TriagePlanOutput, ctx: WorkflowContext[Never, str]
 ) -> None:
     """Handle rejected queries."""
     await ctx.yield_output(
@@ -306,14 +281,29 @@ class ClarifyExecutor(Executor):
         self._agent = agent
 
     @handler
-    async def handle(
-        self, triage: DynamicTriageUserModeOutput, ctx: WorkflowContext[Never, str]
+    async def handle_plan_clarify(
+        self, triage: TriagePlanOutput, ctx: WorkflowContext[Never, str]
     ) -> None:
-        """Generate clarification request."""
+        """Generate clarification request from plan agent."""
+        await self._generate_clarification(triage.reject_reason, ctx)
+
+    @handler
+    async def handle_replan_clarify(
+        self, triage: TriageReplanOutput, ctx: WorkflowContext[Never, str]
+    ) -> None:
+        """Generate clarification request from replan agent."""
+        await self._generate_clarification(triage.clarification_reason, ctx)
+
+    async def _generate_clarification(
+        self, reason: str, ctx: WorkflowContext[Never, str]
+    ) -> None:
+        """Generate clarification request with given reason."""
         original_query = await ctx.get_shared_state("original_query")
         prompt = f"""The user asked: "{original_query}"
 
 This query is related to data operations but is unclear or ambiguous.
+Reason: {reason}
+
 Please provide a polite clarification request.
 
 Output JSON with ClarifyOutput schema:
@@ -345,16 +335,22 @@ class DynamicOrchestrator(Executor):
 
     @handler
     async def execute_plan(
-        self, triage: DynamicTriageUserModeOutput, ctx: WorkflowContext[ReviewRequest]
+        self, triage: TriagePlanOutput, ctx: WorkflowContext[ReviewRequest | StreamingRequest]
     ) -> None:
-        """Execute the plan from user mode triage."""
-        await self._execute(triage.plan, ctx, is_retry=False)
+        """Execute the plan from plan mode triage (initial)."""
+        all_results = await self._run_plan(triage.plan, {})
+
+        # Store results
+        await ctx.set_shared_state("execution_results", all_results)
+
+        # Initial execution goes to review
+        await ctx.send_message(ReviewRequest(execution_results=all_results))
 
     @handler
     async def execute_new_plan(
-        self, triage: DynamicTriageReviewModeOutput, ctx: WorkflowContext[ReviewRequest]
+        self, triage: TriageReplanOutput, ctx: WorkflowContext[ReviewRequest | StreamingRequest]
     ) -> None:
-        """Execute new plan from review mode (retry)."""
+        """Execute new plan from replan mode (retry)."""
         previous_results = await ctx.get_shared_state("execution_results") or {}
 
         # Execute new plan
@@ -369,44 +365,19 @@ class DynamicOrchestrator(Executor):
         # Store merged results
         await ctx.set_shared_state("execution_results", merged_results)
 
-        # Send to review
-        await ctx.send_message(
-            ReviewRequest(
-                execution_results=merged_results,
-                is_retry=True,
-            )
-        )
-
-    async def _execute(
-        self,
-        plan: list[DynamicTriagePlanStep],
-        ctx: WorkflowContext,
-        is_retry: bool,
-    ) -> None:
-        """Execute a plan and send results to review."""
-        all_results = await self._run_plan(plan, {})
-
-        # Store results
-        await ctx.set_shared_state("execution_results", all_results)
-
-        # Send to review
-        await ctx.send_message(
-            ReviewRequest(
-                execution_results=all_results,
-                is_retry=is_retry,
-            )
-        )
+        # Retry execution goes directly to streaming (no review)
+        await ctx.send_message(StreamingRequest(execution_results=merged_results))
 
     async def _run_plan(
         self,
-        plan: list[DynamicTriagePlanStep],
+        plan: list[PlanStep],
         existing_results: dict[int, list[ExecutionResult]],
     ) -> dict[int, list[ExecutionResult]]:
         """Run a plan with step-based parallelism."""
         all_results: dict[int, list[ExecutionResult]] = {}
 
         # Group tasks by step number
-        steps_grouped: dict[int, list[DynamicTriagePlanStep]] = defaultdict(list)
+        steps_grouped: dict[int, list[PlanStep]] = defaultdict(list)
         for task in plan:
             steps_grouped[task.step].append(task)
 
@@ -435,11 +406,11 @@ class DynamicOrchestrator(Executor):
         return all_results
 
     async def _execute_step_parallel(
-        self, tasks: list[DynamicTriagePlanStep], context: str
+        self, tasks: list[PlanStep], context: str
     ) -> list[ExecutionResult]:
         """Execute all tasks in a step concurrently."""
 
-        async def run_single_task(task: DynamicTriagePlanStep) -> ExecutionResult:
+        async def run_single_task(task: PlanStep) -> ExecutionResult:
             agent = self._agents[task.agent]
 
             # Build message with context if available
@@ -466,16 +437,22 @@ class DynamicOrchestrator(Executor):
 class ReviewExecutor(Executor):
     """Executor for reviewing execution results."""
 
-    def __init__(self, agent: ChatAgent, id: str = "review_executor"):
+    def __init__(
+        self,
+        review_agent: ChatAgent,
+        summary_agent: ChatAgent,
+        id: str = "review_executor",
+    ):
         super().__init__(id=id)
-        self._agent = agent
+        self._review_agent = review_agent
+        self._summary_agent = summary_agent
+        self.output_response = True  # Enable streaming event detection
 
     @handler
     async def review(
-        self, request: ReviewRequest, ctx: WorkflowContext[ReviewDecision]
+        self, request: ReviewRequest, ctx: WorkflowContext[ReplanRequest, str]
     ) -> None:
         """Review execution results for completeness."""
-        retry_count = await ctx.get_shared_state("retry_count") or 0
         original_query = await ctx.get_shared_state("original_query")
 
         # Build review prompt
@@ -488,39 +465,61 @@ class ReviewExecutor(Executor):
 ## Execution Results
 {results_str}
 
-## Context
-- This is {"a retry attempt" if request.is_retry else "the first attempt"}
-- Retry count: {retry_count}
-- Maximum retries allowed: 1
-
 ## Instructions
 Evaluate whether the execution results fully answer the user's query.
 Output JSON with ReviewOutput schema:
 - is_complete: bool
-- summary: str (if complete, provide final user-facing summary)
 - missing_aspects: list[str] (if incomplete)
-- suggested_approach: str (if incomplete, how to address gaps)
-- confidence: float (0.0 to 1.0)
+- suggested_approach: str (if incomplete)
+- confidence: float (0.0 to 1.0)"""
 
-{"IMPORTANT: This is a retry. Accept the result unless there's a critical gap." if request.is_retry else ""}
-{"IMPORTANT: Maximum retries reached. Accept the result." if retry_count >= 1 else ""}"""
-
-        response = await self._agent.run(
+        response = await self._review_agent.run(
             messages=[ChatMessage(Role.USER, text=prompt)]
         )
 
         output = ReviewOutput.model_validate_json(response.text)
 
-        await ctx.send_message(
-            ReviewDecision(
-                is_complete=output.is_complete,
-                summary=output.summary,
-                missing_aspects=output.missing_aspects,
-                suggested_approach=output.suggested_approach,
-                confidence=output.confidence,
-                execution_results=request.execution_results,
+        if output.is_complete:
+            # Stream the final summary
+            await self._stream_summary(request.execution_results, original_query, ctx)
+        else:
+            # Send to replan
+            await ctx.send_message(
+                ReplanRequest(
+                    original_query=original_query,
+                    previous_results=request.execution_results,
+                    missing_aspects=output.missing_aspects,
+                    suggested_approach=output.suggested_approach,
+                )
             )
-        )
+
+    async def _stream_summary(
+        self,
+        results: dict[int, list[ExecutionResult]],
+        original_query: str,
+        ctx: WorkflowContext,
+    ) -> None:
+        """Stream the final summary using summary agent."""
+        results_str = self._format_results(results)
+        prompt = f"""Answer the user's question based on the collected data.
+
+## User's Question
+{original_query}
+
+## Collected Data
+{results_str}
+
+## Your Task
+1. Start with a direct answer (1-2 sentences summary)
+2. Include the detailed data - preserve all tables, lists, and specifics
+3. Add insights or recommended actions if relevant"""
+
+        # Stream the response using AgentRunUpdateEvent for SSE streaming
+        async for event in self._summary_agent.run_stream(
+            messages=[ChatMessage(Role.USER, text=prompt)]
+        ):
+            if event.text:
+                await ctx.add_event(AgentRunUpdateEvent(self.id, event))
 
     def _format_results(
         self, results: dict[int, list[ExecutionResult]]
@@ -537,122 +536,85 @@ Output JSON with ReviewOutput schema:
         return "\n".join(parts) if parts else "(No results)"
 
 
-# === Review Outcome Routing ===
-@executor(id="route_review")
-async def route_review(
-    decision: ReviewDecision, ctx: WorkflowContext[ReviewDecision]
-) -> None:
-    """Route based on review decision."""
-    retry_count = await ctx.get_shared_state("retry_count") or 0
+# === Streaming Summary Executor (for retry path) ===
+class StreamingSummaryExecutor(Executor):
+    """Executor for streaming final output after retry."""
 
-    # Store decision for potential retry
-    await ctx.set_shared_state("review_decision", decision)
-
-    # If incomplete and can retry, increment counter
-    if not decision.is_complete and retry_count < 1:
-        await ctx.set_shared_state("retry_count", retry_count + 1)
-        await ctx.set_shared_state("is_retry", True)
-
-    await ctx.send_message(decision)
-
-
-def select_review_outcome(
-    decision: ReviewDecision, target_ids: list[str]
-) -> list[str]:
-    """Select path after review.
-
-    target_ids order: [aggregator, triage_review_mode]
-    """
-    aggregator_id, triage_id = target_ids
-
-    if decision.is_complete:
-        return [aggregator_id]
-
-    # Incomplete - route to triage for potential retry
-    return [triage_id]
-
-
-# === Triage Review Mode Bridge ===
-@executor(id="triage_review_bridge")
-async def triage_review_bridge(
-    decision: ReviewDecision, ctx: WorkflowContext[ReviewModeRequest]
-) -> None:
-    """Bridge review decision to triage in review mode."""
-    await ctx.send_message(
-        ReviewModeRequest(
-            review_feedback=decision,
-            previous_results=decision.execution_results,
-        )
-    )
-
-
-# === Review Mode Response Routing ===
-def select_triage_review_outcome(
-    triage: DynamicTriageReviewModeOutput, target_ids: list[str]
-) -> list[str]:
-    """Select path after triage review mode.
-
-    target_ids order: [orchestrator_retry, output_existing]
-    """
-    orchestrator_id, output_id = target_ids
-
-    if triage.accept_review and triage.new_plan:
-        return [orchestrator_id]
-
-    return [output_id]
-
-
-# === Output Existing Response (when triage rejects review) ===
-@executor(id="output_existing")
-async def output_existing(
-    triage: DynamicTriageReviewModeOutput, ctx: WorkflowContext[Never, str]
-) -> None:
-    """Output existing response when triage rejects review feedback."""
-    execution_results = await ctx.get_shared_state("execution_results")
-
-    # Format and output existing results
-    output = _format_final_output(execution_results, triage.rejection_reason)
-    await ctx.yield_output(output)
-
-
-# === Final Aggregator ===
-class FinalAggregator(Executor):
-    """Aggregate final response with review summary."""
-
-    def __init__(self, id: str = "final_aggregator"):
+    def __init__(self, summary_agent: ChatAgent, id: str = "streaming_summary"):
         super().__init__(id=id)
+        self._summary_agent = summary_agent
+        self.output_response = True  # Enable streaming event detection
 
     @handler
-    async def aggregate(
-        self, decision: ReviewDecision, ctx: WorkflowContext[Never, str]
+    async def stream_output(
+        self, request: StreamingRequest, ctx: WorkflowContext[Never, str]
     ) -> None:
-        """Output final aggregated response."""
-        if decision.summary:
-            # Use review summary
-            await ctx.yield_output(decision.summary)
-        else:
-            # Fall back to formatted results
-            output = _format_final_output(decision.execution_results, "")
-            await ctx.yield_output(output)
+        """Stream the final summary."""
+        original_query = await ctx.get_shared_state("original_query")
+        results_str = self._format_results(request.execution_results)
 
+        prompt = f"""Answer the user's question based on the collected data.
 
-def _format_final_output(
-    results: dict[int, list[ExecutionResult]], note: str = ""
-) -> str:
-    """Format execution results for final output."""
-    sections = []
+## User's Question
+{original_query}
 
-    for step_num in sorted(results.keys()):
-        for result in results[step_num]:
-            agent_name = result.agent.replace("_", " ").title()
-            sections.append(f"## {agent_name}\n{result.response}")
+## Collected Data
+{results_str}
 
-    output = "\n\n---\n\n".join(sections)
+## Your Task
+1. Start with a direct answer (1-2 sentences summary)
+2. Include the detailed data - preserve all tables, lists, and specifics
+3. Add insights or recommended actions if relevant"""
 
-    if note:
-        output = f"{output}\n\n---\n\n*Note: {note}*"
+        # Stream the response using AgentRunUpdateEvent for SSE streaming
+        async for event in self._summary_agent.run_stream(
+            messages=[ChatMessage(Role.USER, text=prompt)]
+        ):
+            if event.text:
+                await ctx.add_event(AgentRunUpdateEvent(self.id, event))
 
-    return output
+    @handler
+    async def stream_existing(
+        self, triage: TriageReplanOutput, ctx: WorkflowContext[Never, str]
+    ) -> None:
+        """Stream existing results when replan is rejected."""
+        original_query = await ctx.get_shared_state("original_query")
+        execution_results = await ctx.get_shared_state("execution_results") or {}
+        results_str = self._format_results(execution_results)
+
+        prompt = f"""Answer the user's question based on the collected data.
+
+## User's Question
+{original_query}
+
+## Collected Data
+{results_str}
+
+## Your Task
+1. Start with a direct answer (1-2 sentences summary)
+2. Include the detailed data - preserve all tables, lists, and specifics
+3. Add insights or recommended actions if relevant"""
+
+        # Stream the response using AgentRunUpdateEvent for SSE streaming
+        async for event in self._summary_agent.run_stream(
+            messages=[ChatMessage(Role.USER, text=prompt)]
+        ):
+            if event.text:
+                await ctx.add_event(AgentRunUpdateEvent(self.id, event))
+
+    def _format_results(
+        self, results: dict[int, list[ExecutionResult]]
+    ) -> str:
+        """Format execution results for summary."""
+        parts = []
+        for step_num in sorted(results.keys()):
+            for result in results[step_num]:
+                parts.append(
+                    f"---\nAgent: {result.agent}\n"
+                    f"Question: {result.question}\n"
+                    f"Response:\n{result.response}\n---"
+                )
+        return "\n".join(parts) if parts else "(No results)"
 
 
 # === Workflow Factory ===
@@ -682,9 +644,10 @@ def create_dynamic_workflow(
     """
     if registry is None:
         # Mode 1: env settings
-        user_mode_triage_agent = create_user_mode_triage_agent()
-        review_mode_triage_agent = create_review_mode_triage_agent()
+        plan_agent = create_plan_agent()
+        replan_agent = create_replan_agent()
         review_agent = create_review_agent()
+        summary_agent = create_summary_agent()
         clarify_agent = create_clarify_agent()
         servicenow_agent = create_servicenow_agent()
         log_analytics_agent = create_log_analytics_agent()
@@ -694,20 +657,18 @@ def create_dynamic_workflow(
         if workflow_model is None:
             raise ValueError("workflow_model is required when registry is provided")
         model_for = create_model_resolver(workflow_model, agent_mapping)
-        user_mode_triage_agent = create_user_mode_triage_agent(registry, model_for("dynamic_triage_user"))
-        review_mode_triage_agent = create_review_mode_triage_agent(registry, model_for("dynamic_triage_review"))
+        plan_agent = create_plan_agent(registry, model_for("plan"))
+        replan_agent = create_replan_agent(registry, model_for("replan"))
         review_agent = create_review_agent(registry, model_for("review"))
+        summary_agent = create_summary_agent(registry, model_for("summary"))
         clarify_agent = create_clarify_agent(registry, model_for("clarify"))
         servicenow_agent = create_servicenow_agent(registry, model_for("servicenow"))
         log_analytics_agent = create_log_analytics_agent(registry, model_for("log_analytics"))
         service_health_agent = create_service_health_agent(registry, model_for("service_health"))
 
-    # Create executors - use two separate triage executors for user mode and review mode
-    user_mode_triage = UserModeTriageExecutor(user_mode_triage_agent)
-    review_mode_triage = ReviewModeTriageExecutor(review_mode_triage_agent)
-
+    # Create executors
+    triage = TriageExecutor(plan_agent, replan_agent)
     clarify_executor = ClarifyExecutor(clarify_agent)
-
     orchestrator = DynamicOrchestrator(
         agents={
             "servicenow": servicenow_agent,
@@ -715,43 +676,33 @@ def create_dynamic_workflow(
             "service_health": service_health_agent,
         }
     )
-
-    review_executor = ReviewExecutor(review_agent)
-    aggregator = FinalAggregator()
+    review_executor = ReviewExecutor(review_agent, summary_agent)
+    streaming_summary = StreamingSummaryExecutor(summary_agent)
 
     # Build workflow
+    # max_iterations controls the maximum number of "super steps" (full graph traversals)
+    # A retry path needs: store→triage→orchestrator→review→triage→orchestrator→streaming
+    # Setting to 10 allows for reasonable retry loops while preventing infinite loops
     workflow = (
         WorkflowBuilder(
             name="Dynamic Ops Workflow",
             description="Dynamic multi-agent workflow with planning, execution, and review loop",
+            max_iterations=10,
         )
-        # Phase 1: Input processing -> User mode triage
+        # Phase 1: Input → Triage (plan mode)
         .set_start_executor(store_query)
-        .add_edge(store_query, user_mode_triage)
-        # Phase 2: User mode routing
-        .add_edge(user_mode_triage, route_user_triage)
+        .add_edge(store_query, triage)
+        # Phase 2: Triage routing (unified for both plan and replan outputs)
         .add_multi_selection_edge_group(
-            route_user_triage,
-            [reject_query, clarify_executor, orchestrator],
-            selection_func=select_user_triage_path,
+            triage,
+            [clarify_executor, reject_query, orchestrator, streaming_summary],
+            selection_func=select_triage_path,
         )
-        # Phase 3: Orchestrator to review
+        # Phase 3: Orchestrator → Review (for initial) or StreamingSummary (for retry)
         .add_edge(orchestrator, review_executor)
-        # Phase 4: Review outcome routing
-        .add_edge(review_executor, route_review)
-        .add_multi_selection_edge_group(
-            route_review,
-            [aggregator, triage_review_bridge],
-            selection_func=select_review_outcome,
-        )
-        # Phase 5: Review mode handling -> Review mode triage (separate executor)
-        .add_edge(triage_review_bridge, review_mode_triage)
-        # Phase 6: Review mode triage outcome
-        .add_multi_selection_edge_group(
-            review_mode_triage,
-            [orchestrator, output_existing],
-            selection_func=select_triage_review_outcome,
-        )
+        .add_edge(orchestrator, streaming_summary)
+        # Phase 4: Review → Triage (replan mode) if incomplete
+        .add_edge(review_executor, triage)
         .build()
     )
 

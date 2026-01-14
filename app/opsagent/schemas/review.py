@@ -4,13 +4,14 @@ from pydantic import BaseModel, Field
 
 
 class ReviewOutput(BaseModel):
-    """Structured output from review agent."""
+    """Structured output from review agent.
+
+    Note: This schema does not include a summary field.
+    When is_complete=True, the streaming summary agent will generate the final output.
+    """
 
     is_complete: bool = Field(
         description="Whether all user questions are adequately answered"
-    )
-    summary: str = Field(
-        default="", description="Final summary of findings (if complete)"
     )
     missing_aspects: list[str] = Field(
         default_factory=list,

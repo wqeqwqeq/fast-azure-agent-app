@@ -1,17 +1,11 @@
-"""Plan Agent for initial query analysis and execution planning.
-
-This agent analyzes user queries and decides whether to:
-- reject: Query is completely unrelated to data operations
-- clarify: Query is related but ambiguous/unclear
-- execute: Query is clear, create an execution plan
-"""
+"""Plan Agent for analyzing user queries and creating execution plans."""
 
 from dataclasses import dataclass
 from typing import Optional
 
 from ..factory import create_agent
 from ..model_registry import ModelRegistry
-from ..schemas.plan import PlanAgentOutput
+from ..schemas.triage_plan import TriagePlanOutput
 
 
 @dataclass(frozen=True)
@@ -19,17 +13,17 @@ class PlanAgentConfig:
     """Configuration for the Plan agent."""
 
     name: str = "plan-agent"
-    description: str = "Analyzes user queries and creates execution plans"
-    instructions: str = """You are a planning agent that analyzes user queries related to data operationsxw and creates execution plans.
+    description: str = "Analyzes user queries and creates multi-step execution plans"
+    instructions: str = """You are a planning agent that analyzes user queries and creates execution plans.
 
 ## Your Task
 
-Analyze the user's query and decide:
-1. **reject**: Query is completely unrelated to data operations
-2. **clarify**: Query is related but ambiguous/unclear
-3. **execute**: Query is clear, create an execution plan
+Given a user's query about IT operations, decide the best course of action:
+- **plan**: Create an execution plan if the query is clear and actionable
+- **clarify**: Request clarification if the query is related but ambiguous
+- **reject**: Reject if the query is completely outside your scope
 
-## Available Agents for Execution
+## Available Agents
 
 You can dispatch tasks to these specialized agents:
 
@@ -45,8 +39,9 @@ You can dispatch tasks to these specialized agents:
   - Tools: check_databricks_health, check_snowflake_health, check_azure_service_health
   - Use for: service status, health checks, availability monitoring
 
-## Planning Rules
+## Planning Guidelines
 
+When creating execution plans:
 - **Same step number** = parallel execution (agents run simultaneously)
 - **Different step numbers** = sequential execution (step 1 finishes before step 2 starts)
 - Step N automatically receives ALL results from step N-1 as context
@@ -57,9 +52,8 @@ You can dispatch tasks to these specialized agents:
 
 ```json
 {
-  "action": "execute",
+  "action": "plan",
   "reject_reason": "",
-  "clarify_reason": "",
   "plan": [
     {"step": 1, "agent": "servicenow", "question": "..."},
     {"step": 1, "agent": "log_analytics", "question": "..."},
@@ -69,22 +63,13 @@ You can dispatch tasks to these specialized agents:
 }
 ```
 
-## Decision Guidelines
+## Action Guidelines
 
-- **reject**: Only if query is completely outside data operations scope (e.g., "What's the weather?")
-- **clarify**: When query is related but too vague (e.g., "Check the service" - which service?)
-- **execute**: When query is clear enough to create a specific plan
+- **plan**: Query is clear and can be answered by available agents
+- **clarify**: Query is related to data operations but too vague or ambiguous
+- **reject**: Query is completely unrelated (e.g., weather, general knowledge)
 
-## Examples
-
-Query: "What's the status of CHG0012345?"
-→ action: "execute", plan: [{"step": 1, "agent": "servicenow", "question": "Get details for change request CHG0012345"}]
-
-Query: "Check if everything is working"
-→ action: "clarify", clarify_reason: "Please specify which services you want to check (Databricks, Snowflake, pipelines, etc.)"
-
-Query: "What's the capital of France?"
-→ action: "reject", reject_reason: "This query is not related to data operations or IT service management"
+When action is "clarify" or "reject", provide a helpful `reject_reason`.
 """
 
 
@@ -95,7 +80,7 @@ def create_plan_agent(
     registry: Optional[ModelRegistry] = None,
     model_name: Optional[str] = None,
 ):
-    """Create the Plan agent for initial query analysis.
+    """Create and return the Plan agent for query analysis.
 
     Args:
         registry: ModelRegistry for cloud mode, None for env settings
@@ -107,5 +92,5 @@ def create_plan_agent(
         instructions=CONFIG.instructions,
         registry=registry,
         model_name=model_name,
-        response_format=PlanAgentOutput,
+        response_format=TriagePlanOutput,
     )

@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     enable_sensitive_data: bool = True  # Enable to log prompts/responses in traces
 
     # Default model
-    default_model: str = "gpt-4.1-mini"
+    default_model: str = "gpt-4.1"
 
     # Local testing credentials (for local_psql/local_redis modes)
     local_test_client_id: str = "00000000-0000-0000-0000-000000000001"

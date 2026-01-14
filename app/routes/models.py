@@ -33,7 +33,8 @@ async def get_agents() -> AgentsResponse:
             "service_health",
             "review",
             "clarify",
-            "dynamic_triage_user",
-            "dynamic_triage_review",
+            "plan",
+            "replan",
+            "summary",
         ]
     )

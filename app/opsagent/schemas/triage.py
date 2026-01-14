@@ -1,7 +1,7 @@
 """Triage agent output schemas.
 
 This module contains schemas for the basic triage agent used in triage_workflow.
-For dynamic triage agent schemas (used in dynamic_workflow), see dynamic_triage.py.
+For dynamic workflow schemas, see triage_plan.py and triage_replan.py.
 """
 
 from typing import Literal

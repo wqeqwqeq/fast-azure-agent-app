@@ -93,8 +93,8 @@ class AgentModelMapping(BaseModel):
     service_health: Optional[ModelName] = None
     review: Optional[ModelName] = None
     clarify: Optional[ModelName] = None
-    dynamic_triage_user: Optional[ModelName] = None
-    dynamic_triage_review: Optional[ModelName] = None
+    plan: Optional[ModelName] = None
+    replan: Optional[ModelName] = None
     summary: Optional[ModelName] = None
 
     def get(self, agent_key: str) -> Optional[str]:

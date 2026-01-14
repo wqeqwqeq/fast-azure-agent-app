@@ -3,15 +3,14 @@
 # Shared workflow types
 from .common import MessageData, WorkflowInput
 
-# Triage agent schemas
+# Triage agent schemas (for triage_workflow)
 from .triage import TaskAssignment, TriageOutput
 
-# Dynamic triage agent schemas
-from .dynamic_triage import (
-    DynamicTriagePlanStep,
-    DynamicTriageUserModeOutput,
-    DynamicTriageReviewModeOutput,
-)
+# Plan agent schemas (for dynamic_workflow)
+from .triage_plan import PlanStep, TriagePlanOutput
+
+# Replan agent schemas (for dynamic_workflow)
+from .triage_replan import TriageReplanOutput
 
 # Review agent schemas
 from .review import ReviewOutput
@@ -23,13 +22,14 @@ __all__ = [
     # Shared
     "MessageData",
     "WorkflowInput",
-    # Triage agent
+    # Triage agent (triage_workflow)
     "TaskAssignment",
     "TriageOutput",
-    # Dynamic triage agent
-    "DynamicTriagePlanStep",
-    "DynamicTriageUserModeOutput",
-    "DynamicTriageReviewModeOutput",
+    # Plan agent (dynamic_workflow)
+    "PlanStep",
+    "TriagePlanOutput",
+    # Replan agent (dynamic_workflow)
+    "TriageReplanOutput",
     # Review agent
     "ReviewOutput",
     # Clarify agent
