@@ -515,11 +515,19 @@ Output JSON with ReviewOutput schema:
 3. Add insights or recommended actions if relevant"""
 
         # Stream the response using AgentRunUpdateEvent for SSE streaming
+        # Also collect full text for workflow output
+        full_response_parts: list[str] = []
         async for event in self._summary_agent.run_stream(
             messages=[ChatMessage(Role.USER, text=prompt)]
         ):
             if event.text:
+                full_response_parts.append(event.text)
                 await ctx.add_event(AgentRunUpdateEvent(self.id, event))
+
+        # Emit WorkflowOutputEvent with the complete response
+        full_response = "".join(full_response_parts)
+        if full_response:
+            await ctx.yield_output(full_response)
 
     def _format_results(
         self, results: dict[int, list[ExecutionResult]]
@@ -567,11 +575,19 @@ class StreamingSummaryExecutor(Executor):
 3. Add insights or recommended actions if relevant"""
 
         # Stream the response using AgentRunUpdateEvent for SSE streaming
+        # Also collect full text for workflow output
+        full_response_parts: list[str] = []
         async for event in self._summary_agent.run_stream(
             messages=[ChatMessage(Role.USER, text=prompt)]
         ):
             if event.text:
+                full_response_parts.append(event.text)
                 await ctx.add_event(AgentRunUpdateEvent(self.id, event))
+
+        # Emit WorkflowOutputEvent with the complete response
+        full_response = "".join(full_response_parts)
+        if full_response:
+            await ctx.yield_output(full_response)
 
     @handler
     async def stream_existing(
@@ -596,11 +612,19 @@ class StreamingSummaryExecutor(Executor):
 3. Add insights or recommended actions if relevant"""
 
         # Stream the response using AgentRunUpdateEvent for SSE streaming
+        # Also collect full text for workflow output
+        full_response_parts: list[str] = []
         async for event in self._summary_agent.run_stream(
             messages=[ChatMessage(Role.USER, text=prompt)]
         ):
             if event.text:
+                full_response_parts.append(event.text)
                 await ctx.add_event(AgentRunUpdateEvent(self.id, event))
+
+        # Emit WorkflowOutputEvent with the complete response
+        full_response = "".join(full_response_parts)
+        if full_response:
+            await ctx.yield_output(full_response)
 
     def _format_results(
         self, results: dict[int, list[ExecutionResult]]
