@@ -18,19 +18,19 @@
     position: relative;
 }
 
-/* Top Bar */
+/* Top Bar - ChatGPT style fixed header */
 .top-bar {
     padding: 10px 16px;
-    position: absolute;
-    top: 0;
-    left: 0;
+    position: relative;
     width: 100%;
     z-index: 10;
     display: flex;
     align-items: center;
     gap: 12px;
-    background: transparent;
+    background-color: var(--main-bg);
     height: var(--header-height);
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
 }
 
 .main-toggle-btn {
