@@ -136,6 +136,11 @@ def create_app() -> FastAPI:
     if static_dir.exists():
         app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
+    # Serve documentation files
+    docs_dir = Path(__file__).parent.parent / "docs"
+    if docs_dir.exists():
+        app.mount("/doc", StaticFiles(directory=docs_dir, html=True), name="docs")
+
     # Include routers
     app.include_router(user.router, prefix="/api", tags=["user"])
     app.include_router(models.router, prefix="/api", tags=["models"])
