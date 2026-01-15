@@ -15,6 +15,7 @@ class SendMessageRequest(BaseModel):
     agent_model_mapping: Optional[AgentModelMapping] = Field(
         None, description="Per-agent model overrides"
     )
+    react_mode: bool = Field(False, description="Use ReAct (dynamic) workflow instead of triage")
 
     @field_validator("message", mode="before")
     @classmethod

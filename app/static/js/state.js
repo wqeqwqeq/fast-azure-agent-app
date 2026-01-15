@@ -14,5 +14,8 @@ let currentThinkingEvents = [];
 // Feature flags from backend
 let showFuncResult = true;
 
+// ReAct mode toggle state (false = Triage, true = Dynamic/ReAct)
+let reactModeEnabled = false;
+
 // Evaluation state tracking - keyed by "conversationId:seq"
 let messageEvaluations = {};  // {"convId:seq": {is_satisfy: bool, comment: string}}

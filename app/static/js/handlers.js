@@ -257,6 +257,19 @@ function updateConversationTitle(newTitle) {
 }
 
 // ============================================================
+// ReAct Mode Toggle Handler
+// ============================================================
+
+function initReactModeToggle() {
+    const checkbox = document.getElementById('react-mode-checkbox');
+    if (checkbox) {
+        checkbox.addEventListener('change', (e) => {
+            reactModeEnabled = e.target.checked;
+        });
+    }
+}
+
+// ============================================================
 // Input Handlers
 // ============================================================
 

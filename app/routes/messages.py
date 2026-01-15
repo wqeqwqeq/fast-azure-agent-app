@@ -11,7 +11,6 @@ from fastapi.responses import StreamingResponse
 
 from agent_framework._workflows._events import AgentRunUpdateEvent, WorkflowOutputEvent
 
-from ..config import get_settings
 from ..dependencies import CurrentUserDep, HistoryManagerDep
 from ..core.events import set_current_message_seq, set_current_queue
 from ..opsagent.schemas.common import MessageData, WorkflowInput
@@ -119,8 +118,6 @@ async def send_message(
             """Run the workflow and emit events to the queue."""
             nonlocal final_output, workflow_error
 
-            settings = get_settings()
-
             try:
                 # Set up context for middleware
                 set_current_queue(event_queue)
@@ -130,7 +127,8 @@ async def send_message(
                 registry = request.app.state.model_registry
 
                 # Create fresh workflow for this request with resolved model config
-                if settings.dynamic_plan:
+                # Use react_mode from request body (default: False = triage workflow)
+                if body.react_mode:
                     workflow = create_dynamic_workflow(registry, workflow_model, agent_model_mapping)
                 else:
                     workflow = create_triage_workflow(registry, workflow_model, agent_model_mapping)

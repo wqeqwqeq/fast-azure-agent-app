@@ -13,6 +13,9 @@ async function init() {
     // Initialize model selector (attach event listener once)
     initModelSelector();
 
+    // Initialize ReAct mode toggle
+    initReactModeToggle();
+
     // Render model selector display
     renderModelSelector();
 

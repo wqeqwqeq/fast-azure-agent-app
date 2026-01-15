@@ -48,7 +48,7 @@ async function sendMessageStream(id, message) {
     return fetch(`${API_BASE}/api/conversations/${id}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message })
+        body: JSON.stringify({ message, react_mode: reactModeEnabled })
     });
 }
 
