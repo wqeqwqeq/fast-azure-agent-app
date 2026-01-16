@@ -1,9 +1,10 @@
 """FastAPI application configuration using Pydantic Settings."""
 
 from functools import lru_cache
-from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.opsagent.model_registry import DEFAULT_MODEL
 
 
 class Settings(BaseSettings):
@@ -47,8 +48,8 @@ class Settings(BaseSettings):
     local_otlp_endpoint: str = "http://localhost:4317"
     enable_sensitive_data: bool = True  # Enable to log prompts/responses in traces
 
-    # Default model
-    default_model: str = "gpt-4.1"
+    # Default model (from registry, can be overridden via env)
+    default_model: str = DEFAULT_MODEL
 
     # Local testing credentials (for local_psql/local_redis modes)
     local_test_client_id: str = "00000000-0000-0000-0000-000000000001"

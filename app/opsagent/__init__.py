@@ -13,6 +13,7 @@ from .agents import (
 )
 from .model_registry import (
     AVAILABLE_MODELS,
+    DEFAULT_MODEL,
     AgentModelMapping,
     ModelDefinition,
     ModelName,
@@ -33,6 +34,7 @@ __all__ = [
     "create_triage_agent",
     # Model configuration
     "AVAILABLE_MODELS",
+    "DEFAULT_MODEL",
     "AgentModelMapping",
     "ModelDefinition",
     "ModelName",

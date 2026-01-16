@@ -68,6 +68,9 @@ AVAILABLE_MODELS: list[ModelDefinition] = [GPT41, GPT41_MINI]
 # Literal type for Pydantic validation
 ModelName = Literal["gpt-4.1", "gpt-4.1-mini"]
 
+# Default model for fallback
+DEFAULT_MODEL: ModelName = "gpt-4.1"
+
 
 # --- Agent Lists by Workflow Type ---
 TRIAGE_AGENTS: list[str] = [

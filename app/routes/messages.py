@@ -11,6 +11,7 @@ from fastapi.responses import StreamingResponse
 
 from agent_framework._workflows._events import AgentRunUpdateEvent, WorkflowOutputEvent
 
+from ..config import get_settings
 from ..dependencies import CurrentUserDep, HistoryManagerDep
 from ..core.events import set_current_message_seq, set_current_queue
 from ..opsagent.schemas.common import MessageData, WorkflowInput
@@ -90,7 +91,7 @@ async def send_message(
     user_message_seq = len(convo["messages"])
 
     # Resolve workflow_model: request > conversation.model > fallback
-    workflow_model = body.workflow_model or convo.get("model") or "gpt-4.1"
+    workflow_model = body.workflow_model or convo.get("model") or get_settings().default_model
 
     # Get agent level LLM overwrite from request (already validated by Pydantic)
     agent_level_llm_overwrite = body.agent_level_llm_overwrite

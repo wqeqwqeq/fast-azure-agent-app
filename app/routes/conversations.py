@@ -44,7 +44,7 @@ async def list_conversations(
         ConversationResponse(
             id=cid,
             title=convo.get("title", "New chat"),
-            model=convo.get("model", "gpt-4.1-mini"),
+            model=convo.get("model", get_settings().default_model),
             created_at=convo.get("created_at", ""),
             last_modified=convo.get("last_modified", ""),
             messages=[],  # May be empty for lazy-loaded list
@@ -120,7 +120,7 @@ async def get_conversation(
     return ConversationResponse(
         id=conversation_id,
         title=convo.get("title", "New chat"),
-        model=convo.get("model", "gpt-4.1-mini"),
+        model=convo.get("model", get_settings().default_model),
         messages=[
             {"role": m["role"], "content": m["content"], "time": m.get("time")}
             for m in convo.get("messages", [])

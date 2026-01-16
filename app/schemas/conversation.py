@@ -16,7 +16,7 @@ class MessageSchema(BaseModel):
 class ConversationCreate(BaseModel):
     """Schema for creating a new conversation."""
 
-    model: str = Field(default="gpt-4o-mini", description="LLM model to use")
+    model: str = Field(default="gpt-4.1", description="LLM model to use")
 
 
 class ConversationUpdate(BaseModel):
