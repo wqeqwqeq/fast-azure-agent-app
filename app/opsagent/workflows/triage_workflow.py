@@ -18,9 +18,11 @@ from agent_framework import (
 )
 from typing_extensions import Never
 
-from ..agents.log_analytics_agent import create_log_analytics_agent
-from ..agents.service_health_agent import create_service_health_agent
-from ..agents.servicenow_agent import create_servicenow_agent
+from ..agents.sub_agents import (
+    create_log_analytics_agent,
+    create_service_health_agent,
+    create_servicenow_agent,
+)
 from ..agents.summary_agent import create_summary_agent
 from ..agents.triage_agent import create_triage_agent
 from ..model_registry import AgentModelMapping, ModelName, ModelRegistry, create_model_resolver

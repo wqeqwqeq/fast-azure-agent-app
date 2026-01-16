@@ -3,9 +3,9 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from ..factory import create_agent
-from ..model_registry import ModelRegistry
-from ..tools.service_health_tools import (
+from ...factory import create_agent
+from ...model_registry import ModelRegistry
+from .tools.service_health_tools import (
     check_azure_service_health,
     check_databricks_health,
     check_snowflake_health,

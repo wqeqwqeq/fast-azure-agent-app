@@ -3,9 +3,9 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from ..factory import create_agent
-from ..model_registry import ModelRegistry
-from ..tools.log_analytics_tools import (
+from ...factory import create_agent
+from ...model_registry import ModelRegistry
+from .tools.log_analytics_tools import (
     get_pipeline_run_details,
     list_failed_pipelines,
     query_pipeline_status,

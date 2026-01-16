@@ -3,9 +3,9 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from ..factory import create_agent
-from ..model_registry import ModelRegistry
-from ..tools.servicenow_tools import (
+from ...factory import create_agent
+from ...model_registry import ModelRegistry
+from .tools.servicenow_tools import (
     get_change_request,
     get_incident,
     list_change_requests,
