@@ -1,6 +1,6 @@
 """Pydantic schemas for conversation-related API endpoints."""
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -35,5 +35,8 @@ class ConversationResponse(BaseModel):
     messages: List[MessageSchema] = Field(default_factory=list, description="Chat messages")
     created_at: str = Field(..., description="ISO8601 creation timestamp")
     last_modified: str = Field(..., description="ISO8601 last modification timestamp")
+    agent_level_llm_overwrite: Optional[Dict[str, str]] = Field(
+        None, description="Per-agent model overrides"
+    )
 
 

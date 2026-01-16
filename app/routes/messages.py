@@ -92,8 +92,8 @@ async def send_message(
     # Resolve workflow_model: request > conversation.model > fallback
     workflow_model = body.workflow_model or convo.get("model") or "gpt-4.1"
 
-    # Get agent model mapping from request (already validated by Pydantic)
-    agent_model_mapping = body.agent_model_mapping
+    # Get agent level LLM overwrite from request (already validated by Pydantic)
+    agent_level_llm_overwrite = body.agent_level_llm_overwrite
 
     # Append user message (model selection stored at conversation level, not per-message)
     now = datetime.now(timezone.utc).isoformat()
@@ -129,9 +129,9 @@ async def send_message(
                 # Create fresh workflow for this request with resolved model config
                 # Use react_mode from request body (default: False = triage workflow)
                 if body.react_mode:
-                    workflow = create_dynamic_workflow(registry, workflow_model, agent_model_mapping)
+                    workflow = create_dynamic_workflow(registry, workflow_model, agent_level_llm_overwrite)
                 else:
-                    workflow = create_triage_workflow(registry, workflow_model, agent_model_mapping)
+                    workflow = create_triage_workflow(registry, workflow_model, agent_level_llm_overwrite)
 
                 # Auto-detect streaming executors from workflow (those with output_response=True)
                 streaming_executor_ids = {
@@ -231,8 +231,8 @@ async def send_message(
 
         # Update conversation with user's model selection (remembers for next time)
         convo["model"] = workflow_model
-        if agent_model_mapping:
-            convo["agent_model_mapping"] = agent_model_mapping.model_dump(exclude_none=True)
+        if agent_level_llm_overwrite:
+            convo["agent_level_llm_overwrite"] = agent_level_llm_overwrite.model_dump(exclude_none=True)
 
         # Save to storage
         await history.save_conversation(conversation_id, user_id, convo)

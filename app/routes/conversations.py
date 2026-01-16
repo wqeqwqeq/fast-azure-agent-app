@@ -127,6 +127,7 @@ async def get_conversation(
         ],
         created_at=convo.get("created_at", ""),
         last_modified=convo.get("last_modified", ""),
+        agent_level_llm_overwrite=convo.get("agent_level_llm_overwrite"),
     )
 
 
@@ -178,6 +179,7 @@ async def update_conversation(
         ],
         created_at=convo.get("created_at", ""),
         last_modified=convo.get("last_modified", ""),
+        agent_level_llm_overwrite=convo.get("agent_level_llm_overwrite"),
     )
 
 

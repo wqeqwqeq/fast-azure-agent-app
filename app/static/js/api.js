@@ -51,12 +51,12 @@ async function sendMessageStream(id, message) {
         workflow_model: selectedModel,
     };
 
-    // Only include agent_model_mapping if any overrides exist
+    // Only include agent_level_llm_overwrite if any overrides exist
     const overrides = Object.fromEntries(
-        Object.entries(agentModelMapping).filter(([_, v]) => v !== null)
+        Object.entries(agent_level_llm_overwrite).filter(([_, v]) => v !== null)
     );
     if (Object.keys(overrides).length > 0) {
-        body.agent_model_mapping = overrides;
+        body.agent_level_llm_overwrite = overrides;
     }
 
     return fetch(`${API_BASE}/api/conversations/${id}/messages`, {

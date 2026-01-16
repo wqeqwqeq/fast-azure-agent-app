@@ -22,7 +22,7 @@ let availableModels = [];     // ["gpt-4.1", "gpt-4.1-mini"]
 let availableAgents = [];     // ["triage", "servicenow", ...] - varies by react mode
 
 // Per-agent model overrides (agent_key -> model_name or null)
-let agentModelMapping = {};   // {"triage": "gpt-4.1-mini", ...}
+let agent_level_llm_overwrite = {};   // {"triage": "gpt-4.1-mini", ...}
 
 // Evaluation state tracking - keyed by "conversationId:seq"
 let messageEvaluations = {};  // {"convId:seq": {is_satisfy: bool, comment: string}}

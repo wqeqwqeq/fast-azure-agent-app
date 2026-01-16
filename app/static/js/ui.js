@@ -256,7 +256,7 @@ function renderModelSelector() {
     }
 
     // Count active overrides for badge display
-    const overrideCount = Object.values(agentModelMapping).filter(v => v !== null).length;
+    const overrideCount = Object.values(agent_level_llm_overwrite).filter(v => v !== null).length;
     const overrideBadge = overrideCount > 0 ? ` <span class="override-badge">${overrideCount}</span>` : '';
     modelVersion.innerHTML = modelVersion.textContent + overrideBadge;
 
@@ -275,7 +275,7 @@ function renderModelSelector() {
                 </div>
                 <div class="agent-submenu">
                     ${availableAgents.map(agent => {
-                        const agentModel = agentModelMapping[agent] || null;
+                        const agentModel = agent_level_llm_overwrite[agent] || null;
                         // Show actual model name: override if set, otherwise workflow model
                         const effectiveModel = agentModel || model;
                         const agentDisplayModel = effectiveModel.replace('gpt-', 'GPT-');
@@ -317,7 +317,7 @@ function renderModelSelector() {
                 // Select this model and expand it
                 selectedModel = model;
                 // Clear agent overrides when switching workflow model
-                agentModelMapping = {};
+                agent_level_llm_overwrite = {};
                 // Collapse other groups, expand this one
                 document.querySelectorAll('.model-option-group').forEach(g => g.classList.remove('expanded'));
                 group.classList.add('expanded');
@@ -354,9 +354,9 @@ function renderModelSelector() {
             const workflowModel = parentGroup ? parentGroup.dataset.model : selectedModel;
 
             if (newModel === workflowModel) {
-                delete agentModelMapping[agent];
+                delete agent_level_llm_overwrite[agent];
             } else {
-                agentModelMapping[agent] = newModel;
+                agent_level_llm_overwrite[agent] = newModel;
             }
 
             // Update button text inline (don't re-render whole menu)
@@ -373,7 +373,7 @@ function renderModelSelector() {
             dropdown.classList.remove('open');
 
             // Update badge count in header
-            const overrideCount = Object.values(agentModelMapping).filter(v => v !== null).length;
+            const overrideCount = Object.values(agent_level_llm_overwrite).filter(v => v !== null).length;
             const modelVersion = document.getElementById('current-model-version');
             const baseVersion = selectedModel === 'gpt-4.1' ? '4.1' : selectedModel.replace('gpt-', '');
             modelVersion.innerHTML = overrideCount > 0

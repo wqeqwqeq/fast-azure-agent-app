@@ -12,7 +12,7 @@ class SendMessageRequest(BaseModel):
 
     message: str = Field(..., min_length=1, description="User message content")
     workflow_model: Optional[str] = Field(None, description="Model for workflow execution")
-    agent_model_mapping: Optional[AgentModelMapping] = Field(
+    agent_level_llm_overwrite: Optional[AgentModelMapping] = Field(
         None, description="Per-agent model overrides"
     )
     react_mode: bool = Field(False, description="Use ReAct (dynamic) workflow instead of triage")

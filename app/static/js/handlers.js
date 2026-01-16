@@ -27,9 +27,12 @@ document.addEventListener('click', (e) => {
 async function handleNewChat() {
     const newConvo = await createConversation();
     currentConversationId = newConvo.id;
+    // Reset agent-level overrides for new conversation
+    agent_level_llm_overwrite = {};
     await fetchConversations();
     setActiveNavItem(null);
     renderConversationsList();
+    renderModelSelector();
     renderWelcomeScreen();
 }
 
@@ -46,9 +49,27 @@ async function selectConversation(id) {
         }
     }
 
+    // Track if we need to re-render model selector
+    let modelChanged = false;
+
     // Update selected model to match conversation's model
     if (convo.model && convo.model !== selectedModel) {
         selectedModel = convo.model;
+        modelChanged = true;
+    }
+
+    // Restore agent-level LLM overwrite from conversation (or clear if none)
+    if (convo.agent_level_llm_overwrite && Object.keys(convo.agent_level_llm_overwrite).length > 0) {
+        agent_level_llm_overwrite = { ...convo.agent_level_llm_overwrite };
+        modelChanged = true;
+    } else if (Object.keys(agent_level_llm_overwrite).length > 0) {
+        // Clear existing overrides if conversation has none
+        agent_level_llm_overwrite = {};
+        modelChanged = true;
+    }
+
+    // Re-render model selector if anything changed
+    if (modelChanged) {
         renderModelSelector();
     }
 
@@ -279,7 +300,7 @@ function initReactModeToggle() {
 
             // Clear agent model overrides when switching modes
             // (agent lists differ between triage and dynamic workflows)
-            agentModelMapping = {};
+            agent_level_llm_overwrite = {};
 
             // Refresh agents list for new mode
             availableAgents = await fetchAgents(reactModeEnabled);
