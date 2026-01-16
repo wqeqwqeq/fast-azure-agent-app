@@ -16,6 +16,10 @@ async function init() {
     // Initialize ReAct mode toggle
     initReactModeToggle();
 
+    // Cache models and agents at startup (fetched once, agents refresh on react mode change)
+    availableModels = await fetchModels();
+    availableAgents = await fetchAgents(reactModeEnabled);
+
     // Render model selector display
     renderModelSelector();
 

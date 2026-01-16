@@ -45,10 +45,24 @@ async function deleteConversation(id) {
 
 // Send message and return Response for SSE streaming
 async function sendMessageStream(id, message) {
+    const body = {
+        message,
+        react_mode: reactModeEnabled,
+        workflow_model: selectedModel,
+    };
+
+    // Only include agent_model_mapping if any overrides exist
+    const overrides = Object.fromEntries(
+        Object.entries(agentModelMapping).filter(([_, v]) => v !== null)
+    );
+    if (Object.keys(overrides).length > 0) {
+        body.agent_model_mapping = overrides;
+    }
+
     return fetch(`${API_BASE}/api/conversations/${id}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, react_mode: reactModeEnabled })
+        body: JSON.stringify(body)
     });
 }
 
@@ -56,6 +70,12 @@ async function fetchModels() {
     const res = await fetch(`${API_BASE}/api/models`);
     const data = await res.json();
     return data.models || [];
+}
+
+async function fetchAgents(reactMode = false) {
+    const res = await fetch(`${API_BASE}/api/agents?react_mode=${reactMode}`);
+    const data = await res.json();
+    return data.agents || [];
 }
 
 async function fetchSettings() {

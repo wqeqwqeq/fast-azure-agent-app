@@ -17,5 +17,12 @@ let showFuncResult = true;
 // ReAct mode toggle state (false = Triage, true = Dynamic/ReAct)
 let reactModeEnabled = false;
 
+// Model selection cache (fetched once at startup, agents refresh on react mode change)
+let availableModels = [];     // ["gpt-4.1", "gpt-4.1-mini"]
+let availableAgents = [];     // ["triage", "servicenow", ...] - varies by react mode
+
+// Per-agent model overrides (agent_key -> model_name or null)
+let agentModelMapping = {};   // {"triage": "gpt-4.1-mini", ...}
+
 // Evaluation state tracking - keyed by "conversationId:seq"
 let messageEvaluations = {};  // {"convId:seq": {is_satisfy: bool, comment: string}}

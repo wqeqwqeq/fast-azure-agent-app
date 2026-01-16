@@ -82,7 +82,9 @@
     position: absolute;
     top: 120%;
     left: 0;
-    width: 220px;
+    width: 280px;
+    max-height: 400px;
+    overflow-y: auto;
     background: white;
     border: 1px solid rgba(0, 0, 0, 0.1);
     border-radius: 16px;
@@ -96,19 +98,116 @@
     display: block;
 }
 
-.model-option {
-    display: flex;
+/* Override badge */
+.override-badge {
+    display: inline-flex;
     align-items: center;
-    padding: 12px;
-    font-size: 0.95rem;
-    border-radius: 8px;
-    cursor: pointer;
-    color: var(--text-primary);
-    margin-bottom: 2px;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    font-size: 11px;
+    font-weight: 600;
+    color: white;
+    background-color: #6b7280;
+    border-radius: 9px;
+    margin-left: 6px;
 }
 
-.model-option:hover {
-    background-color: var(--hover-bg);
+/* Two-level model selector */
+.workflow-model {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.workflow-model.selected {
+    background-color: #f3f4f6;
+}
+
+.expand-icon {
+    width: 16px;
+    height: 16px;
+    stroke: var(--text-secondary);
+    stroke-width: 2;
+    fill: none;
+}
+
+.model-option-group.expanded .expand-icon {
+    transform: rotate(90deg);
+}
+
+/* Agent submenu */
+.agent-submenu {
+    display: none;
+    padding: 4px 0 4px 12px;
+    border-left: 2px solid #e5e7eb;
+    margin-left: 12px;
+}
+
+.model-option-group.expanded .agent-submenu {
+    display: block;
+}
+
+.agent-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+}
+
+.agent-name {
+    color: var(--text-secondary);
+}
+
+.agent-model-selector {
+    position: relative;
+}
+
+.agent-model-btn {
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    background-color: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+/* Agent model dropdown */
+.agent-model-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    min-width: 120px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    padding: 4px;
+    z-index: 1001;
+    margin-top: 4px;
+}
+
+.agent-model-dropdown.open {
+    display: block;
+}
+
+.agent-model-choice {
+    padding: 8px 12px;
+    font-size: 0.8rem;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.agent-model-choice.selected {
+    background-color: #f3f4f6;
+    font-weight: 500;
 }
 
 /* ReAct Mode Toggle - iPhone style */

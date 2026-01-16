@@ -12,6 +12,10 @@ function closeAllDropdowns() {
     });
     // Close model selector
     document.getElementById('model-selector-container').classList.remove('open');
+    // Close agent model dropdowns
+    document.querySelectorAll('.agent-model-dropdown.open').forEach(dropdown => {
+        dropdown.classList.remove('open');
+    });
     openDropdown = null;
 }
 
@@ -251,22 +255,130 @@ function renderModelSelector() {
         modelVersion.textContent = selectedModel.replace('gpt-', '');
     }
 
-    // Render model options
-    fetchModels().then(models => {
-        modelMenu.innerHTML = models.map(model => {
-            const displayName = model.replace('gpt-', 'GPT-');
-            return `<div class="model-option" data-model="${model}">${displayName}</div>`;
-        }).join('');
+    // Count active overrides for badge display
+    const overrideCount = Object.values(agentModelMapping).filter(v => v !== null).length;
+    const overrideBadge = overrideCount > 0 ? ` <span class="override-badge">${overrideCount}</span>` : '';
+    modelVersion.innerHTML = modelVersion.textContent + overrideBadge;
 
-        // Attach click handlers to model options
-        document.querySelectorAll('.model-option').forEach(option => {
-            option.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                selectedModel = option.dataset.model;
+    // Build two-level dropdown HTML using cached availableModels and availableAgents
+    let menuHtml = '';
+
+    availableModels.forEach(model => {
+        const displayName = model.replace('gpt-', 'GPT-');
+        const isSelected = model === selectedModel;
+
+        menuHtml += `
+            <div class="model-option-group ${isSelected ? 'expanded' : ''}" data-model="${model}">
+                <div class="workflow-model ${isSelected ? 'selected' : ''}" data-model="${model}">
+                    <span class="model-name">${displayName}</span>
+                    <svg class="expand-icon" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </div>
+                <div class="agent-submenu">
+                    ${availableAgents.map(agent => {
+                        const agentModel = agentModelMapping[agent] || null;
+                        // Show actual model name: override if set, otherwise workflow model
+                        const effectiveModel = agentModel || model;
+                        const agentDisplayModel = effectiveModel.replace('gpt-', 'GPT-');
+                        return `
+                            <div class="agent-row" data-agent="${agent}">
+                                <span class="agent-name">${agent}</span>
+                                <div class="agent-model-selector">
+                                    <button class="agent-model-btn" data-agent="${agent}">${agentDisplayModel}</button>
+                                    <div class="agent-model-dropdown">
+                                        ${availableModels.map(m => {
+                                            const mDisplay = m.replace('gpt-', 'GPT-');
+                                            const isAgentModelSelected = effectiveModel === m;
+                                            return `<div class="agent-model-choice ${isAgentModelSelected ? 'selected' : ''}" data-agent="${agent}" data-model="${m}">${mDisplay}</div>`;
+                                        }).join('')}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+    });
+
+    modelMenu.innerHTML = menuHtml;
+
+    // Attach click handlers for workflow model row
+    // Click = select model + toggle expand
+    document.querySelectorAll('.workflow-model').forEach(option => {
+        option.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const model = option.dataset.model;
+            const group = option.closest('.model-option-group');
+
+            // If already selected, just toggle expand
+            if (model === selectedModel) {
+                group.classList.toggle('expanded');
+            } else {
+                // Select this model and expand it
+                selectedModel = model;
+                // Clear agent overrides when switching workflow model
+                agentModelMapping = {};
+                // Collapse other groups, expand this one
+                document.querySelectorAll('.model-option-group').forEach(g => g.classList.remove('expanded'));
+                group.classList.add('expanded');
+                // Update UI
                 renderModelSelector();
-                closeAllDropdowns();
                 await syncModelToCurrentConversation();
+            }
+        });
+    });
+
+    // Attach click handlers for agent model buttons (toggle dropdown)
+    document.querySelectorAll('.agent-model-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const dropdown = btn.nextElementSibling;
+            // Close other agent dropdowns
+            document.querySelectorAll('.agent-model-dropdown.open').forEach(d => {
+                if (d !== dropdown) d.classList.remove('open');
             });
+            dropdown.classList.toggle('open');
+        });
+    });
+
+    // Attach click handlers for agent model choices
+    document.querySelectorAll('.agent-model-choice').forEach(choice => {
+        choice.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const agent = choice.dataset.agent;
+            const newModel = choice.dataset.model;
+
+            // Update agent model mapping
+            // If selecting the workflow model (same as parent group), clear the override
+            const parentGroup = choice.closest('.model-option-group');
+            const workflowModel = parentGroup ? parentGroup.dataset.model : selectedModel;
+
+            if (newModel === workflowModel) {
+                delete agentModelMapping[agent];
+            } else {
+                agentModelMapping[agent] = newModel;
+            }
+
+            // Update button text inline (don't re-render whole menu)
+            const agentRow = choice.closest('.agent-row');
+            const btn = agentRow.querySelector('.agent-model-btn');
+            btn.textContent = newModel.replace('gpt-', 'GPT-');
+
+            // Update selected state in dropdown
+            const dropdown = choice.closest('.agent-model-dropdown');
+            dropdown.querySelectorAll('.agent-model-choice').forEach(c => c.classList.remove('selected'));
+            choice.classList.add('selected');
+
+            // Close only the agent dropdown, keep submenu open
+            dropdown.classList.remove('open');
+
+            // Update badge count in header
+            const overrideCount = Object.values(agentModelMapping).filter(v => v !== null).length;
+            const modelVersion = document.getElementById('current-model-version');
+            const baseVersion = selectedModel === 'gpt-4.1' ? '4.1' : selectedModel.replace('gpt-', '');
+            modelVersion.innerHTML = overrideCount > 0
+                ? `${baseVersion} <span class="override-badge">${overrideCount}</span>`
+                : baseVersion;
         });
     });
 }

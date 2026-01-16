@@ -4,7 +4,18 @@
 
 // Close dropdowns when clicking outside
 document.addEventListener('click', (e) => {
-    if (!e.target.closest('.menu-wrapper') && !e.target.closest('.model-selector-container')) {
+    // Keep model selector open if clicking inside it
+    if (e.target.closest('.model-selector-container')) {
+        // Close agent dropdowns if clicking outside them but inside model selector
+        if (!e.target.closest('.agent-model-dropdown') && !e.target.closest('.agent-model-btn')) {
+            document.querySelectorAll('.agent-model-dropdown.open').forEach(dropdown => {
+                dropdown.classList.remove('open');
+            });
+        }
+        return;
+    }
+    // Close everything when clicking outside
+    if (!e.target.closest('.menu-wrapper')) {
         closeAllDropdowns();
     }
 });
@@ -263,8 +274,18 @@ function updateConversationTitle(newTitle) {
 function initReactModeToggle() {
     const checkbox = document.getElementById('react-mode-checkbox');
     if (checkbox) {
-        checkbox.addEventListener('change', (e) => {
+        checkbox.addEventListener('change', async (e) => {
             reactModeEnabled = e.target.checked;
+
+            // Clear agent model overrides when switching modes
+            // (agent lists differ between triage and dynamic workflows)
+            agentModelMapping = {};
+
+            // Refresh agents list for new mode
+            availableAgents = await fetchAgents(reactModeEnabled);
+
+            // Re-render model selector with new agent list
+            renderModelSelector();
         });
     }
 }

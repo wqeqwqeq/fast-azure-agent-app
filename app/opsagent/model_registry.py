@@ -69,6 +69,28 @@ AVAILABLE_MODELS: list[ModelDefinition] = [GPT41, GPT41_MINI]
 ModelName = Literal["gpt-4.1", "gpt-4.1-mini"]
 
 
+# --- Agent Lists by Workflow Type ---
+TRIAGE_AGENTS: list[str] = [
+    "triage",
+    "servicenow",
+    "log_analytics",
+    "service_health",
+    "summary",
+]
+
+DYNAMIC_AGENTS: list[str] = [
+    "triage",
+    "servicenow",
+    "log_analytics",
+    "review",
+    "clarify",
+    "plan",
+    "service_health",
+    "replan",
+    "summary",
+]
+
+
 # --- Resolved Config (with credentials) ---
 @dataclass(frozen=True)
 class ResolvedModelConfig:

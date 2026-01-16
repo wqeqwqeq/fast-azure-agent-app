@@ -19,22 +19,16 @@ async def get_models(request: Request) -> ModelsResponse:
 
 
 @router.get("/agents", response_model=AgentsResponse)
-async def get_agents() -> AgentsResponse:
-    """List agent keys that can have custom models.
+async def get_agents(react_mode: bool = False) -> AgentsResponse:
+    """List agent keys based on workflow type.
+
+    Args:
+        react_mode: If True, return dynamic workflow agents; otherwise triage agents.
 
     Returns:
         AgentsResponse with list of agent keys for per-agent model override
     """
-    return AgentsResponse(
-        agents=[
-            "triage",
-            "servicenow",
-            "log_analytics",
-            "service_health",
-            "review",
-            "clarify",
-            "plan",
-            "replan",
-            "summary",
-        ]
-    )
+    from ..opsagent.model_registry import DYNAMIC_AGENTS, TRIAGE_AGENTS
+
+    agents = DYNAMIC_AGENTS if react_mode else TRIAGE_AGENTS
+    return AgentsResponse(agents=agents)
