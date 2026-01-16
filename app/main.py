@@ -41,6 +41,7 @@ logger = logging.getLogger(__name__)
 logging.getLogger("azure.core.pipeline.policies.http_logging_policy").setLevel(logging.WARNING)
 logging.getLogger("azure.identity").setLevel(logging.WARNING)
 logging.getLogger("azure.monitor.opentelemetry.exporter").setLevel(logging.WARNING)
+logging.getLogger("agent_framework").setLevel(logging.WARNING)
 
 
 @asynccontextmanager
