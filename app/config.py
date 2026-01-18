@@ -4,7 +4,7 @@ from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from app.opsagent.model_registry import DEFAULT_MODEL
+from app.opsagent.model_registry import DEFAULT_MODEL, GPT41_MINI
 
 
 class Settings(BaseSettings):
@@ -64,7 +64,7 @@ class Settings(BaseSettings):
     # Memory feature settings (uses sequence numbers, not rounds)
     memory_rolling_window_size: int = 14   # Window covers 14 messages (7 rounds)
     memory_summarize_after_seq: int = 5    # Start summarizing when end_seq >= 5 (after round 3)
-    memory_model: str = "gpt-4.1-mini"     # Use mini model for faster/cheaper summarization
+    memory_model: str = GPT41_MINI.name     # Use mini model for faster/cheaper summarization
 
     # Local testing credentials (for local_psql/local_redis modes)
     local_test_client_id: str = "00000000-0000-0000-0000-000000000001"
