@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -20,6 +21,9 @@ from ..opsagent.workflows.triage_workflow import create_triage_workflow
 from ..schemas import SendMessageRequest
 
 logger = logging.getLogger(__name__)
+
+# Regex to extract JSON data from SSE event string
+SSE_DATA_PATTERN = re.compile(r"data: (.+)\n")
 
 router = APIRouter()
 
@@ -114,6 +118,8 @@ async def send_message(
         event_queue: asyncio.Queue[Optional[str]] = asyncio.Queue()
         final_output: Optional[str] = None
         workflow_error: Optional[str] = None
+        # Collect call events for tracking
+        collected_call_events: list[dict] = []
 
         async def run_workflow():
             """Run the workflow and emit events to the queue."""
@@ -216,6 +222,18 @@ async def send_message(
                 if event is None:
                     break
                 yield event
+
+                # Parse SSE event to collect call tracking data
+                if "thinking" in event:
+                    match = SSE_DATA_PATTERN.search(event)
+                    if match:
+                        try:
+                            data = json.loads(match.group(1))
+                            event_type = data.get("type")
+                            if event_type in ("agent_finished", "function_end"):
+                                collected_call_events.append(data)
+                        except (json.JSONDecodeError, AttributeError):
+                            pass
         except asyncio.CancelledError:
             workflow_task.cancel()
             raise
@@ -253,6 +271,17 @@ async def send_message(
         # Calculate assistant sequence number
         assistant_seq = user_message_seq + 1
 
+        # Insert call tracking records (non-blocking background task)
+        if collected_call_events and hasattr(request.app.state, "call_backend"):
+            asyncio.create_task(
+                _insert_call_records(
+                    request.app.state,
+                    conversation_id,
+                    assistant_seq,
+                    collected_call_events,
+                )
+            )
+
         # Trigger memory summarization in background (non-blocking, only if use_memory enabled)
         if body.use_memory:
             memory_service = request.app.state.memory_service
@@ -289,3 +318,74 @@ async def send_message(
             "Transfer-Encoding": "chunked",
         },
     )
+
+
+async def _insert_call_records(
+    app_state,
+    conversation_id: str,
+    assistant_seq: int,
+    call_events: list[dict],
+) -> None:
+    """Insert call tracking records for agent and function calls.
+
+    Runs as a background task after the response is saved.
+
+    Args:
+        app_state: FastAPI app state containing backends
+        conversation_id: Conversation ID
+        assistant_seq: Sequence number of the assistant message
+        call_events: List of agent_finished and function_end event data
+    """
+    try:
+        # Get the message_id for the assistant message
+        message_id = await app_state.history_manager.backend.get_message_id(
+            conversation_id, assistant_seq
+        )
+        if not message_id:
+            logger.warning(
+                f"Could not find message_id for conversation={conversation_id}, "
+                f"seq={assistant_seq}. Skipping call tracking."
+            )
+            return
+
+        # Build call records from events
+        call_records = []
+        for event in call_events:
+            event_type = event.get("type")
+
+            if event_type == "agent_finished":
+                usage = event.get("usage") or {}
+                call_records.append({
+                    "conversation_id": conversation_id,
+                    "message_id": message_id,
+                    "agent_name": event.get("agent"),
+                    "function_name": None,
+                    "model": event.get("model"),
+                    "input_tokens": usage.get("input_tokens"),
+                    "output_tokens": usage.get("output_tokens"),
+                    "total_tokens": usage.get("total_tokens"),
+                    "execution_time_ms": event.get("execution_time_ms"),
+                })
+            elif event_type == "function_end":
+                call_records.append({
+                    "conversation_id": conversation_id,
+                    "message_id": message_id,
+                    "agent_name": None,
+                    "function_name": event.get("function"),
+                    "model": None,
+                    "input_tokens": None,
+                    "output_tokens": None,
+                    "total_tokens": None,
+                    "execution_time_ms": event.get("execution_time_ms"),
+                })
+
+        # Bulk insert to database
+        if call_records:
+            await app_state.call_backend.bulk_insert(call_records)
+            logger.debug(
+                f"Inserted {len(call_records)} call records for "
+                f"conversation={conversation_id}, message_id={message_id}"
+            )
+
+    except Exception as e:
+        logger.error(f"Failed to insert call records: {e}")

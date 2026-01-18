@@ -85,6 +85,37 @@ CREATE INDEX IF NOT EXISTS idx_memory_conversation_status
     ON memory (conversation_id, status, end_sequence DESC);
 
 -- ================================================================
+-- Table: call
+-- Tracks agent and function calls with token usage and timing
+-- Each call is associated with a message via message_id
+-- ================================================================
+CREATE TABLE IF NOT EXISTS call (
+    call_id SERIAL PRIMARY KEY,
+    conversation_id VARCHAR(50) NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+    message_id INTEGER NOT NULL REFERENCES messages(message_id) ON DELETE CASCADE,
+    agent_name VARCHAR(100),           -- NULL for function calls
+    function_name VARCHAR(100),        -- NULL for agent calls
+    model VARCHAR(100),                -- NULL for function calls
+    input_tokens INTEGER,              -- NULL for function calls
+    output_tokens INTEGER,             -- NULL for function calls
+    total_tokens INTEGER,              -- NULL for function calls
+    execution_time_ms INTEGER,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Index for querying by message (most common)
+CREATE INDEX IF NOT EXISTS idx_call_message
+    ON call (message_id, created_at ASC);
+
+-- Index for querying by conversation
+CREATE INDEX IF NOT EXISTS idx_call_conversation
+    ON call (conversation_id, created_at ASC);
+
+-- Index for cleanup job (delete old calls)
+CREATE INDEX IF NOT EXISTS idx_call_created_at
+    ON call (created_at);
+
+-- ================================================================
 -- Verification
 -- ================================================================
 \echo ''
@@ -97,7 +128,7 @@ SELECT
     pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) as size
 FROM pg_tables
 WHERE schemaname = 'public'
-    AND tablename IN ('conversations', 'messages', 'memory')
+    AND tablename IN ('conversations', 'messages', 'memory', 'call')
 ORDER BY tablename;
 
 \echo ''
@@ -108,7 +139,7 @@ SELECT
     indexname as index_name
 FROM pg_indexes
 WHERE schemaname = 'public'
-    AND tablename IN ('conversations', 'messages', 'memory')
+    AND tablename IN ('conversations', 'messages', 'memory', 'call')
 ORDER BY tablename, indexname;
 
 \echo ''

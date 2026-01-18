@@ -1,5 +1,6 @@
 """Infrastructure layer for external service integrations."""
 
+from .call_backend import CallBackend, CallRecord
 from .keyvault import AKV
 from .manager import AsyncChatHistoryManager
 from .postgresql import AsyncPostgreSQLBackend
@@ -11,5 +12,7 @@ __all__ = [
     "AsyncChatHistoryManager",
     "AsyncPostgreSQLBackend",
     "AsyncRedisBackend",
+    "CallBackend",
+    "CallRecord",
     "configure_tracing",
 ]

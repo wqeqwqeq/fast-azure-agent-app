@@ -66,6 +66,9 @@ class Settings(BaseSettings):
     memory_summarize_after_seq: int = 5    # Start summarizing when end_seq >= 5 (after round 3)
     memory_model: str = GPT41_MINI.name     # Use mini model for faster/cheaper summarization
 
+    # Call tracking settings
+    call_retention_days: int = 7  # Number of days to retain call records
+
     # Local testing credentials (for local_psql/local_redis modes)
     local_test_client_id: str = "00000000-0000-0000-0000-000000000001"
     local_test_username: str = "local_user"

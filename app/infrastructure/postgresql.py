@@ -322,3 +322,30 @@ class AsyncPostgreSQLBackend:
                 sequence_number,
             )
             return dict(row) if row else None
+
+    async def get_message_id(
+        self,
+        conversation_id: str,
+        sequence_number: int,
+    ) -> Optional[int]:
+        """Get the message_id for a specific message by conversation and sequence.
+
+        Args:
+            conversation_id: Conversation ID
+            sequence_number: Message sequence number
+
+        Returns:
+            message_id if found, None otherwise
+        """
+        if not self.pool:
+            raise RuntimeError("PostgreSQL pool not initialized")
+
+        async with self.pool.acquire() as conn:
+            return await conn.fetchval(
+                """
+                SELECT message_id FROM messages
+                WHERE conversation_id = $1 AND sequence_number = $2
+                """,
+                conversation_id,
+                sequence_number,
+            )

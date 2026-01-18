@@ -17,11 +17,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from .config import get_settings
-from .infrastructure import AsyncChatHistoryManager, configure_tracing
+from .infrastructure import AsyncChatHistoryManager, CallBackend, configure_tracing
 from .infrastructure.keyvault import AKV
 from .memory_agent import MemoryService
 from .opsagent.model_registry import ModelRegistry
-from .routes import conversations, evaluation, messages, models, settings, user
+from .routes import calls, conversations, evaluation, messages, models, settings, user
 
 # All secrets to pre-load at startup
 REQUIRED_SECRETS = [
@@ -115,6 +115,16 @@ async def lifespan(app: FastAPI):
     app.state.memory_service = memory_service
     logger.info("Memory service initialized")
 
+    # Initialize call tracking backend (uses existing PostgreSQL pool)
+    call_backend = CallBackend(pool=history_manager.backend.pool)
+    app.state.call_backend = call_backend
+
+    # Cleanup old call records at startup
+    deleted = await call_backend.delete_old_calls(app_settings.call_retention_days)
+    if deleted > 0:
+        logger.info(f"Cleaned up {deleted} call records older than {app_settings.call_retention_days} days")
+    logger.info("Call tracking backend initialized")
+
     yield
 
     # Cleanup on shutdown
@@ -161,6 +171,7 @@ def create_app() -> FastAPI:
     app.include_router(conversations.router, prefix="/api", tags=["conversations"])
     app.include_router(messages.router, prefix="/api", tags=["messages"])
     app.include_router(evaluation.router, prefix="/api", tags=["evaluation"])
+    app.include_router(calls.router, prefix="/api", tags=["calls"])
 
     @app.get("/health")
     async def health_check():
