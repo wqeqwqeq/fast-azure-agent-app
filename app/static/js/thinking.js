@@ -105,7 +105,12 @@ function appendThinkingEvent(message) {
         eventDiv.textContent = `Agent: ${eventData.agent}`;
         indicator.appendChild(eventDiv);
     } else if (eventData.type === 'agent_finished') {
-        currentThinkingEvents.push({ type: 'text', content: `Agent ${eventData.agent} finished` });
+        // Store with optional output for orchestration agents
+        currentThinkingEvents.push({
+            type: 'agent_finished',
+            agent: eventData.agent,
+            output: eventData.output || null
+        });
 
         const eventDiv = document.createElement('div');
         eventDiv.className = 'thinking-event';
@@ -206,43 +211,64 @@ function replaceThinkingWithResponse(content, seq) {
 }
 
 // ============================================================
-// Function Card Rendering for Flyout
+// Card Rendering for Flyout
 // ============================================================
 
-function renderFunctionCard(funcName, args, result) {
-    const argsJson = JSON.stringify(args, null, 2);
-    const resultJson = result !== null && result !== undefined ? JSON.stringify(result, null, 2) : null;
+// Generic card rendering function for functions and agent outputs
+function renderCard(title, sections) {
+    // sections = [{label: "Input Parameters", content: {...}}, {label: "Output", content: {...}}]
+    const sectionsHtml = sections
+        .filter(s => s.content !== null && s.content !== undefined)
+        .map(s => {
+            const contentJson = JSON.stringify(s.content, null, 2);
+            return `
+                <div class="function-section">
+                    <div class="function-section-header" onclick="toggleFunctionSection(this)">
+                        <svg class="section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                        <span>${escapeHtml(s.label)}</span>
+                    </div>
+                    <div class="function-section-content collapsed">
+                        <pre class="json-display">${escapeHtml(contentJson)}</pre>
+                    </div>
+                </div>
+            `;
+        }).join('');
 
     return `
         <div class="function-card">
             <div class="function-header">
-                <span class="function-name">Calling ${escapeHtml(funcName)}...</span>
+                <span class="function-name">${escapeHtml(title)}</span>
             </div>
             <div class="function-details">
-                <div class="function-section">
-                    <div class="function-section-header" onclick="toggleFunctionSection(this)">
-                        <svg class="section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="9 18 15 12 9 6"></polyline>
-                        </svg>
-                        <span>Input Parameters</span>
-                    </div>
-                    <div class="function-section-content collapsed">
-                        <pre class="json-display">${escapeHtml(argsJson)}</pre>
-                    </div>
-                </div>
-                ${resultJson !== null ? `
-                <div class="function-section">
-                    <div class="function-section-header" onclick="toggleFunctionSection(this)">
-                        <svg class="section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="9 18 15 12 9 6"></polyline>
-                        </svg>
-                        <span>Output Result</span>
-                    </div>
-                    <div class="function-section-content collapsed">
-                        <pre class="json-display">${escapeHtml(resultJson)}</pre>
-                    </div>
-                </div>
-                ` : ''}
+                ${sectionsHtml}
+            </div>
+        </div>
+    `;
+}
+
+// Render function call card using generic renderCard
+function renderFunctionCard(funcName, args, result) {
+    return renderCard(`Calling ${funcName}...`, [
+        { label: 'Input Parameters', content: args },
+        { label: 'Output Result', content: result }
+    ]);
+}
+
+// Render agent output as a simple collapsible section
+function renderAgentOutputCard(agentName, output) {
+    const contentJson = JSON.stringify(output, null, 2);
+    return `
+        <div class="function-section agent-output-section">
+            <div class="function-section-header" onclick="toggleFunctionSection(this)">
+                <svg class="section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+                <span>Output</span>
+            </div>
+            <div class="function-section-content collapsed">
+                <pre class="json-display">${escapeHtml(contentJson)}</pre>
             </div>
         </div>
     `;
@@ -290,6 +316,14 @@ function renderFlyoutEvents() {
         } else if (event.type === 'function_end') {
             if (!showFuncResult) {
                 html += `<div class="flyout-event">${escapeHtml(event.function)} finished</div>`;
+            }
+            i++;
+        } else if (event.type === 'agent_finished') {
+            // Always show "Agent xxx finished" text
+            html += `<div class="flyout-event">Agent ${escapeHtml(event.agent)} finished</div>`;
+            // Add output dropdown below if available
+            if (event.output && showFuncResult) {
+                html += renderAgentOutputCard(event.agent, event.output);
             }
             i++;
         } else {

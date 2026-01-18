@@ -45,6 +45,13 @@ class Settings(BaseSettings):
 
     # UI settings
     show_func_result: bool = True
+    # Orchestration agents whose structured output should be displayed in thinking flyout
+    orchestration_agents: set[str] = {
+        "triage-agent",
+        "plan-agent",
+        "replan-agent",
+        "review-agent",
+    }
 
     # Observability settings
     tracing_backend: str = "appinsights"  # "disabled", "local", "appinsights"

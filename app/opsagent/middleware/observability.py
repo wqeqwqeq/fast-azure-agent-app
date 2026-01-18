@@ -20,6 +20,7 @@ async def observability_agent_middleware(context, next):  # type: ignore
     """Log agent invocation and completion.
 
     Emits events when an agent starts and finishes execution.
+    For orchestration agents, also emits the structured output.
     """
     agent_name = context.agent.name
 
@@ -30,10 +31,46 @@ async def observability_agent_middleware(context, next):  # type: ignore
 
     await next(context)
 
-    await emit_event({
-        "type": "agent_finished",
-        "agent": agent_name,
-    })
+    # For orchestration agents, wrap generator to collect output
+    # Lazy import to avoid circular dependency
+    from app.config import get_settings
+    if agent_name in get_settings().orchestration_agents:
+        original_result = context.result
+
+        if hasattr(original_result, "__anext__"):
+            # Wrap the async generator to emit agent_finished with output when done
+            async def wrapped_generator():
+                collected_text = []
+                async for item in original_result:
+                    if hasattr(item, "text") and item.text:
+                        collected_text.append(item.text)
+                    yield item
+
+                # After generator exhausted, emit agent_finished with output
+                final_output = "".join(collected_text) if collected_text else None
+                await emit_event({
+                    "type": "agent_finished",
+                    "agent": agent_name,
+                    "output": serialize_result(final_output) if final_output else None,
+                })
+
+            context.result = wrapped_generator()
+        else:
+            # Non-streaming result
+            output = None
+            if hasattr(original_result, "text") and original_result.text:
+                output = original_result.text
+            await emit_event({
+                "type": "agent_finished",
+                "agent": agent_name,
+                "output": serialize_result(output) if output else None,
+            })
+    else:
+        # Non-orchestration agents - emit without output
+        await emit_event({
+            "type": "agent_finished",
+            "agent": agent_name,
+        })
 
 
 def serialize_result(result: Any) -> Any:
@@ -82,3 +119,5 @@ async def observability_function_middleware(context, next):  # type: ignore
         "function": func_name,
         "result": serialize_result(context.result),
     })
+
+
