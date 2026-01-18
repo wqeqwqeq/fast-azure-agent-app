@@ -25,8 +25,9 @@ function showThinkingIndicator() {
     const container = document.querySelector('.messages-container');
     if (!container) return;
 
-    // Clear previous thinking events
+    // Clear previous thinking events and token count
     currentThinkingEvents = [];
+    currentMessageTokens = 0;
 
     // Close any open flyout
     closeThinkingFlyout();
@@ -109,8 +110,14 @@ function appendThinkingEvent(message) {
         currentThinkingEvents.push({
             type: 'agent_finished',
             agent: eventData.agent,
-            output: eventData.output || null
+            output: eventData.output || null,
+            usage: eventData.usage || null
         });
+
+        // Accumulate total tokens
+        if (eventData.usage && eventData.usage.total_tokens) {
+            currentMessageTokens += eventData.usage.total_tokens;
+        }
 
         const eventDiv = document.createElement('div');
         eventDiv.className = 'thinking-event';
@@ -189,7 +196,7 @@ function replaceThinkingWithResponse(content, seq) {
                 <div class="message-role">Assistant</div>
                 ${thinkingCollapsed}
                 <div class="message-content">${DOMPurify.sanitize(marked.parse(streamedText))}</div>
-                ${renderEvaluationButtons(seq)}
+                ${renderEvaluationButtons(seq, currentMessageTokens)}
             `;
         } else {
             // No streaming happened - use the final content
@@ -197,7 +204,7 @@ function replaceThinkingWithResponse(content, seq) {
                 <div class="message-role">Assistant</div>
                 ${thinkingCollapsed}
                 <div class="message-content">${DOMPurify.sanitize(marked.parse(content))}</div>
-                ${renderEvaluationButtons(seq)}
+                ${renderEvaluationButtons(seq, currentMessageTokens)}
             `;
         }
 

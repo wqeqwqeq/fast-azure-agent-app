@@ -11,6 +11,9 @@ let openDropdown = null;  // Track which dropdown is open
 // Thinking events storage for flyout panel
 let currentThinkingEvents = [];
 
+// Token usage tracking for current message
+let currentMessageTokens = 0;
+
 // Feature flags from backend
 let showFuncResult = true;
 
