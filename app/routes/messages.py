@@ -147,16 +147,16 @@ async def send_message(
                     conversation_id, convo["messages"]
                 )
 
-                # Convert messages to workflow input format
-                # Use context.recent_messages (may be subset with rolling window)
-                message_data = []
-                for i, msg in enumerate(context.recent_messages):
-                    content = msg["content"]
-                    # Prepend memory to first user message if available
-                    if i == 0 and msg["role"] == "user" and context.memory_text:
-                        content = f"[Previous context: {context.memory_text}]\n\n{content}"
-                    message_data.append(MessageData(role=msg["role"], text=content))
+                # Format context with XML tags
+                context_prefix = memory_service.format_context_for_workflow(context)
 
+                # Build workflow messages: current user message with context prefix
+                current_user_msg = convo["messages"][-1]
+                user_content = current_user_msg["content"]
+                if context_prefix:
+                    user_content = f"{context_prefix}\n\n{user_content}"
+
+                message_data = [MessageData(role="user", text=user_content)]
                 input_data = WorkflowInput(messages=message_data)
 
                 # Run workflow with streaming
@@ -249,12 +249,18 @@ async def send_message(
         # Save to storage
         await history.save_conversation(conversation_id, user_id, convo)
 
+        # Calculate assistant sequence number
+        assistant_seq = user_message_seq + 1
+
         # Trigger memory summarization in background (non-blocking)
         memory_service = request.app.state.memory_service
-        memory_service.trigger_summarization_if_needed(conversation_id, convo["messages"])
+        await memory_service.trigger_summarization_if_needed(
+            conversation_id,
+            last_saved_seq=assistant_seq,
+            messages=convo["messages"],
+        )
 
         # Emit assistant message
-        assistant_seq = user_message_seq + 1
         yield format_sse_event("message", {
             "type": "assistant",
             "content": reply,

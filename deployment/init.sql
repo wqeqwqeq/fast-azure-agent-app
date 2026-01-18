@@ -64,24 +64,25 @@ CREATE INDEX IF NOT EXISTS idx_messages_conversation_sequence
 
 -- ================================================================
 -- Table: memory
--- Stores summarized conversation memory (append-only for audit trail)
+-- Stores summarized conversation memory with version chain
 -- Each summarization creates a NEW row (not upsert)
--- Empty summaries are NOT written - if no memory, no row exists
+-- Uses status field for database-based concurrency control
 -- ================================================================
 CREATE TABLE IF NOT EXISTS memory (
     memory_id SERIAL PRIMARY KEY,
     conversation_id VARCHAR(50) NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
     memory_text TEXT NOT NULL,
-    -- Track which messages were summarized using sequence from messages table
-    start_sequence INTEGER NOT NULL,        -- First message sequence included
-    end_sequence INTEGER NOT NULL,          -- Last message sequence included
+    start_sequence INTEGER NOT NULL,           -- First message sequence in window
+    end_sequence INTEGER NOT NULL,             -- Last message sequence in window
+    base_memory_id INTEGER REFERENCES memory(memory_id),  -- Previous memory this was based on
+    status VARCHAR(20) DEFAULT 'completed',    -- 'processing' | 'completed' | 'failed'
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    generation_time_ms INTEGER DEFAULT NULL -- How long summarization took (observability)
+    generation_time_ms INTEGER DEFAULT NULL    -- Observability: LLM call duration
 );
 
--- Index for getting most recent memory per conversation
-CREATE INDEX IF NOT EXISTS idx_memory_conversation_latest
-    ON memory (conversation_id, end_sequence DESC);
+-- Index for getting most recent COMPLETED memory
+CREATE INDEX IF NOT EXISTS idx_memory_conversation_status
+    ON memory (conversation_id, status, end_sequence DESC);
 
 -- ================================================================
 -- Verification

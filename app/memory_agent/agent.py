@@ -6,7 +6,7 @@ from typing import Optional
 from app.opsagent.factory import create_agent
 from app.opsagent.model_registry import ModelName, ModelRegistry
 
-from .schemas import MemorySummaryOutput
+from .schemas import StructuredMemory
 
 
 @dataclass(frozen=True)
@@ -14,36 +14,33 @@ class MemoryAgentConfig:
     """Configuration for the Memory agent."""
 
     name: str = "memory-agent"
-    description: str = "Summarizes conversation history for context compression"
-    instructions: str = """You are a conversation summarization assistant. Your task is to create a concise summary of a conversation segment.
+    description: str = "Extracts structured information from conversations"
+    instructions: str = """You are a conversation memory assistant. Extract key information from conversations.
 
-## Your Task
-Given a segment of conversation between a user and an assistant, create a brief summary that captures:
-1. The main topics discussed
-2. Key decisions or conclusions reached
-3. Important context that would be relevant for future interactions
+## Extract These (all optional, only include if present):
+
+- **facts**: Confirmed information (e.g., "Server upgrade scheduled Dec 15", "Budget is $50k")
+- **decisions**: Conclusions reached (e.g., "Using Redis for caching", "Will deploy next week")
+- **user_preferences**: User requirements expressed (e.g., "Prefers Python", "Needs daily reports")
+- **open_questions**: Unresolved items needing follow-up (e.g., "Waiting for approval", "Need to confirm timeline")
+- **entities**: Important identifiers with context
+  - name: The identifier (e.g., "CHG0012345", "John Smith")
+  - aliases: Alternative names (optional)
+  - notes: Key info about this entity (optional)
 
 ## Guidelines
-- Be concise but comprehensive (aim for 2-4 sentences)
-- Preserve important details like names, IDs, dates, or specific values mentioned
-- Focus on information that would help understand future questions in context
-- Use neutral, factual language
-- Do NOT include phrases like "In this conversation..." or "The user asked..."
 
-## Output Format
-Provide your summary as a JSON object with a single "summary" field.
+- Only include fields that have content (omit empty fields)
+- Keep entries concise and factual
+- Focus on information useful for future interactions
+- For entities, capture IDs, names, systems mentioned with relevant context
 
-## Example
-Input conversation:
-User: "Check the status of change request CHG0012345"
-Assistant: "CHG0012345 is approved and scheduled for deployment on Dec 15th. It's for upgrading the database server."
-User: "What about the associated incidents?"
-Assistant: "There are 2 incidents linked: INC001 (resolved) and INC002 (in progress)."
+## When given previous memory + new messages
 
-Output:
-{
-  "summary": "Discussed change request CHG0012345 (approved, scheduled Dec 15th for database server upgrade). Two linked incidents: INC001 (resolved) and INC002 (in progress)."
-}
+- Merge new information with existing
+- Update entity notes with new info
+- Remove resolved items from open_questions
+- Keep the most relevant and recent information
 """
 
 
@@ -66,5 +63,5 @@ def create_memory_agent(
         instructions=CONFIG.instructions,
         registry=registry,
         model_name=model_name,
-        response_format=MemorySummaryOutput,
+        response_format=StructuredMemory,
     )
