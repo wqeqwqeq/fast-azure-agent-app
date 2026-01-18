@@ -63,6 +63,27 @@ CREATE INDEX IF NOT EXISTS idx_messages_conversation_sequence
     ON messages (conversation_id, sequence_number ASC);
 
 -- ================================================================
+-- Table: memory
+-- Stores summarized conversation memory (append-only for audit trail)
+-- Each summarization creates a NEW row (not upsert)
+-- Empty summaries are NOT written - if no memory, no row exists
+-- ================================================================
+CREATE TABLE IF NOT EXISTS memory (
+    memory_id SERIAL PRIMARY KEY,
+    conversation_id VARCHAR(50) NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+    memory_text TEXT NOT NULL,
+    -- Track which messages were summarized using sequence from messages table
+    start_sequence INTEGER NOT NULL,        -- First message sequence included
+    end_sequence INTEGER NOT NULL,          -- Last message sequence included
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    generation_time_ms INTEGER DEFAULT NULL -- How long summarization took (observability)
+);
+
+-- Index for getting most recent memory per conversation
+CREATE INDEX IF NOT EXISTS idx_memory_conversation_latest
+    ON memory (conversation_id, end_sequence DESC);
+
+-- ================================================================
 -- Verification
 -- ================================================================
 \echo ''
@@ -75,7 +96,7 @@ SELECT
     pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) as size
 FROM pg_tables
 WHERE schemaname = 'public'
-    AND tablename IN ('conversations', 'messages')
+    AND tablename IN ('conversations', 'messages', 'memory')
 ORDER BY tablename;
 
 \echo ''
@@ -86,7 +107,7 @@ SELECT
     indexname as index_name
 FROM pg_indexes
 WHERE schemaname = 'public'
-    AND tablename IN ('conversations', 'messages')
+    AND tablename IN ('conversations', 'messages', 'memory')
 ORDER BY tablename, indexname;
 
 \echo ''

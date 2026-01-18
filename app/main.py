@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse
 from .config import get_settings
 from .infrastructure import AsyncChatHistoryManager, configure_tracing
 from .infrastructure.keyvault import AKV
+from .memory_agent import MemoryService
 from .opsagent.model_registry import ModelRegistry
 from .routes import conversations, evaluation, messages, models, settings, user
 
@@ -102,6 +103,17 @@ async def lifespan(app: FastAPI):
 
     # Store in app state for dependency injection
     app.state.history_manager = history_manager
+
+    # Initialize memory service (uses existing PostgreSQL pool)
+    memory_service = MemoryService(
+        pool=history_manager.backend.pool,
+        registry=app.state.model_registry,
+        model_name=app_settings.memory_model,
+        rolling_window=app_settings.memory_rolling_window,
+        summarize_threshold=app_settings.memory_summarize_threshold,
+    )
+    app.state.memory_service = memory_service
+    logger.info("Memory service initialized")
 
     yield
 

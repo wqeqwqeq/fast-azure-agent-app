@@ -141,11 +141,22 @@ async def send_message(
                     if getattr(executor, 'output_response', False)
                 }
 
+                # Get memory context for workflow
+                memory_service = request.app.state.memory_service
+                context = await memory_service.get_context_for_workflow(
+                    conversation_id, convo["messages"]
+                )
+
                 # Convert messages to workflow input format
-                message_data = [
-                    MessageData(role=msg["role"], text=msg["content"])
-                    for msg in convo["messages"]
-                ]
+                # Use context.recent_messages (may be subset with rolling window)
+                message_data = []
+                for i, msg in enumerate(context.recent_messages):
+                    content = msg["content"]
+                    # Prepend memory to first user message if available
+                    if i == 0 and msg["role"] == "user" and context.memory_text:
+                        content = f"[Previous context: {context.memory_text}]\n\n{content}"
+                    message_data.append(MessageData(role=msg["role"], text=content))
+
                 input_data = WorkflowInput(messages=message_data)
 
                 # Run workflow with streaming
@@ -237,6 +248,10 @@ async def send_message(
 
         # Save to storage
         await history.save_conversation(conversation_id, user_id, convo)
+
+        # Trigger memory summarization in background (non-blocking)
+        memory_service = request.app.state.memory_service
+        memory_service.trigger_summarization_if_needed(conversation_id, convo["messages"])
 
         # Emit assistant message
         assistant_seq = user_message_seq + 1

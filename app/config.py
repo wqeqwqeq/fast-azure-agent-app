@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     # Default model (from registry, can be overridden via env)
     default_model: str = DEFAULT_MODEL
 
+    # Memory feature settings
+    memory_rolling_window: int = 14  # Last 7 rounds = 14 messages
+    memory_summarize_threshold: int = 4  # Start summarizing after round 4
+    memory_model: str = "gpt-4.1-mini"  # Use mini model for faster/cheaper summarization
+
     # Local testing credentials (for local_psql/local_redis modes)
     local_test_client_id: str = "00000000-0000-0000-0000-000000000001"
     local_test_username: str = "local_user"
