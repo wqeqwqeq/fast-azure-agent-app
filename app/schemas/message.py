@@ -16,6 +16,7 @@ class SendMessageRequest(BaseModel):
         None, description="Per-agent model overrides"
     )
     react_mode: bool = Field(False, description="Use ReAct (dynamic) workflow instead of triage")
+    use_memory: bool = Field(True, description="Enable memory agent for conversation context")
 
     @field_validator("message", mode="before")
     @classmethod

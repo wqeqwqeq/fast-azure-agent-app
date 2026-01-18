@@ -46,30 +46,65 @@
     color: var(--text-primary);
 }
 
-/* Model Selector */
-.model-selector-container {
+/* ========== Generic Top Bar Dropdown ========== */
+.top-bar-dropdown {
     position: relative;
     display: inline-block;
 }
 
-.model-trigger {
+.dropdown-trigger {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: #202123;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
     cursor: pointer;
-    padding: 10px 16px;
-    border-radius: 12px;
+    padding: 8px 12px;
+    border-radius: 8px;
     background-color: transparent;
-    transition: background 0.2s;
+    transition: background 0.2s, color 0.2s;
     border: none;
 }
 
-.model-trigger:hover,
-.model-selector-container.open .model-trigger {
+.dropdown-trigger:hover,
+.top-bar-dropdown.open .dropdown-trigger {
     background-color: #f4f4f4;
+    color: var(--text-primary);
+}
+
+.dropdown-trigger .chevron-icon {
+    transition: transform 0.2s;
+}
+
+.top-bar-dropdown.open .dropdown-trigger .chevron-icon {
+    transform: rotate(180deg);
+}
+
+.top-bar-dropdown .dropdown-menu {
+    display: none;
+    position: absolute;
+    top: 120%;
+    background: white;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 12px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    padding: 8px;
+    z-index: 1000;
+    animation: fadeIn 0.1s ease-out;
+}
+
+.top-bar-dropdown.open .dropdown-menu {
+    display: block;
+}
+
+/* ========== Model Selector Specific ========== */
+.model-selector-container .dropdown-trigger {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #202123;
+    padding: 10px 16px;
+    border-radius: 12px;
 }
 
 .model-trigger .version {
@@ -77,25 +112,36 @@
     font-weight: 500;
 }
 
-.model-menu {
-    display: none;
-    position: absolute;
-    top: 120%;
+.model-selector-container .dropdown-menu {
     left: 0;
     width: 280px;
     max-height: 400px;
     overflow-y: auto;
-    background: white;
-    border: 1px solid rgba(0, 0, 0, 0.1);
     border-radius: 16px;
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-    padding: 8px;
-    z-index: 1000;
-    animation: fadeIn 0.1s ease-out;
 }
 
-.model-selector-container.open .model-menu {
-    display: block;
+/* ========== Config Dropdown Specific ========== */
+.config-dropdown {
+    margin-left: auto;
+    padding-right: 16px;
+}
+
+.config-dropdown .dropdown-menu {
+    right: 0;
+    min-width: 220px;
+}
+
+.config-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border-radius: 8px;
+    transition: background 0.2s;
+}
+
+.config-item:hover {
+    background-color: #f9fafb;
 }
 
 /* Override badge */
@@ -210,15 +256,7 @@
     font-weight: 500;
 }
 
-/* ReAct Mode Toggle - iPhone style */
-.react-mode-toggle {
-    margin-left: auto;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding-right: 16px;
-}
-
+/* Toggle Switch - iPhone style */
 .toggle-label {
     font-size: 14px;
     color: var(--text-secondary);

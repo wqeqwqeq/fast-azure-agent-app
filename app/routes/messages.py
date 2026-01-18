@@ -141,14 +141,15 @@ async def send_message(
                     if getattr(executor, 'output_response', False)
                 }
 
-                # Get memory context for workflow
-                memory_service = request.app.state.memory_service
-                context = await memory_service.get_context_for_workflow(
-                    conversation_id, convo["messages"]
-                )
-
-                # Format context with XML tags
-                context_prefix = memory_service.format_context_for_workflow(context)
+                # Get memory context for workflow (only if use_memory is enabled)
+                if body.use_memory:
+                    memory_service = request.app.state.memory_service
+                    context = await memory_service.get_context_for_workflow(
+                        conversation_id, convo["messages"]
+                    )
+                    context_prefix = memory_service.format_context_for_workflow(context)
+                else:
+                    context_prefix = ""
 
                 # Build workflow messages: current user message with context prefix
                 current_user_msg = convo["messages"][-1]
@@ -252,13 +253,14 @@ async def send_message(
         # Calculate assistant sequence number
         assistant_seq = user_message_seq + 1
 
-        # Trigger memory summarization in background (non-blocking)
-        memory_service = request.app.state.memory_service
-        await memory_service.trigger_summarization_if_needed(
-            conversation_id,
-            last_saved_seq=assistant_seq,
-            messages=convo["messages"],
-        )
+        # Trigger memory summarization in background (non-blocking, only if use_memory enabled)
+        if body.use_memory:
+            memory_service = request.app.state.memory_service
+            await memory_service.trigger_summarization_if_needed(
+                conversation_id,
+                last_saved_seq=assistant_seq,
+                messages=convo["messages"],
+            )
 
         # Emit assistant message
         yield format_sse_event("message", {

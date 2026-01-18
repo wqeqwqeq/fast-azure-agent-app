@@ -14,8 +14,12 @@ document.addEventListener('click', (e) => {
         }
         return;
     }
+    // Keep config dropdown open if clicking inside the menu (not trigger)
+    if (e.target.closest('.config-dropdown .dropdown-menu')) {
+        return;
+    }
     // Close everything when clicking outside
-    if (!e.target.closest('.menu-wrapper')) {
+    if (!e.target.closest('.menu-wrapper') && !e.target.closest('.top-bar-dropdown')) {
         closeAllDropdowns();
     }
 });
@@ -289,13 +293,17 @@ function updateConversationTitle(newTitle) {
 }
 
 // ============================================================
-// ReAct Mode Toggle Handler
+// Configuration Dropdown Handler
 // ============================================================
 
-function initReactModeToggle() {
-    const checkbox = document.getElementById('react-mode-checkbox');
-    if (checkbox) {
-        checkbox.addEventListener('change', async (e) => {
+function initConfigDropdown() {
+    // Initialize dropdown using generic function
+    initDropdown('config-trigger-btn', 'config-dropdown');
+
+    // ReAct Mode toggle handler (specific logic)
+    const reactCheckbox = document.getElementById('react-mode-checkbox');
+    if (reactCheckbox) {
+        reactCheckbox.addEventListener('change', async (e) => {
             reactModeEnabled = e.target.checked;
 
             // Clear agent model overrides when switching modes
@@ -307,6 +315,15 @@ function initReactModeToggle() {
 
             // Re-render model selector with new agent list
             renderModelSelector();
+        });
+    }
+
+    // Memory Agent toggle handler
+    const memoryCheckbox = document.getElementById('memory-agent-checkbox');
+    if (memoryCheckbox) {
+        memoryCheckbox.checked = memoryAgentEnabled;
+        memoryCheckbox.addEventListener('change', (e) => {
+            memoryAgentEnabled = e.target.checked;
         });
     }
 }

@@ -13,8 +13,8 @@ async function init() {
     // Initialize model selector (attach event listener once)
     initModelSelector();
 
-    // Initialize ReAct mode toggle
-    initReactModeToggle();
+    // Initialize configuration dropdown
+    initConfigDropdown();
 
     // Cache models and agents at startup (fetched once, agents refresh on react mode change)
     availableModels = await fetchModels();

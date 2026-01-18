@@ -98,30 +98,51 @@
                 </label>
 
                 <!-- Model Selector Container -->
-                <div class="model-selector-container" id="model-selector-container">
+                <div class="top-bar-dropdown model-selector-container" id="model-selector-container">
                     <!-- Trigger Button -->
-                    <button class="model-trigger" id="model-trigger-btn">
+                    <button class="dropdown-trigger model-trigger" id="model-trigger-btn">
                         <span id="current-model-display">ChatGPT</span> <span class="version"
                             id="current-model-version">4o-mini</span>
-                        <svg class="icon icon-sm" viewBox="0 0 24 24"
+                        <svg class="icon icon-sm chevron-icon" viewBox="0 0 24 24"
                             style="stroke-width:3; width:14px; height:14px; margin-left:4px;">
                             <polyline points="6 9 12 15 18 9"></polyline>
                         </svg>
                     </button>
 
                     <!-- Menu -->
-                    <div class="model-menu" id="model-menu">
+                    <div class="dropdown-menu model-menu" id="model-menu">
                         <!-- Model options will be dynamically rendered here -->
                     </div>
                 </div>
 
-                <!-- ReAct Mode Toggle -->
-                <div class="react-mode-toggle" id="react-mode-toggle">
-                    <span class="toggle-label">ReAct Mode</span>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="react-mode-checkbox">
-                        <span class="toggle-slider"></span>
-                    </label>
+                <!-- Configuration Dropdown -->
+                <div class="top-bar-dropdown config-dropdown" id="config-dropdown">
+                    <button class="dropdown-trigger" id="config-trigger-btn">
+                        <svg class="icon icon-sm" viewBox="0 0 24 24" style="stroke-width:2;">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                        </svg>
+                        <span>Configuration</span>
+                        <svg class="icon icon-xs chevron-icon" viewBox="0 0 24 24" style="stroke-width:3;">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </button>
+                    <div class="dropdown-menu config-menu" id="config-menu">
+                        <div class="config-item">
+                            <span class="toggle-label">ReAct Mode</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="react-mode-checkbox">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="config-item">
+                            <span class="toggle-label">Memory Agent</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="memory-agent-checkbox" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
                 </div>
             </div>
 

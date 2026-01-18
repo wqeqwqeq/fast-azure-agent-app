@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     # Workflow configuration
     dynamic_plan: bool = False
 
+    # Memory feature toggle (can be overridden per-request)
+    use_memory: bool = True
+
     # UI settings
     show_func_result: bool = True
 

@@ -48,6 +48,7 @@ async function sendMessageStream(id, message) {
     const body = {
         message,
         react_mode: reactModeEnabled,
+        use_memory: memoryAgentEnabled,
         workflow_model: selectedModel,
     };
 

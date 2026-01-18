@@ -17,6 +17,9 @@ let showFuncResult = true;
 // ReAct mode toggle state (false = Triage, true = Dynamic/ReAct)
 let reactModeEnabled = false;
 
+// Memory Agent toggle state (true = enabled by default)
+let memoryAgentEnabled = true;
+
 // Model selection cache (fetched once at startup, agents refresh on react mode change)
 let availableModels = [];     // ["gpt-4.1", "gpt-4.1-mini"]
 let availableAgents = [];     // ["triage", "servicenow", ...] - varies by react mode

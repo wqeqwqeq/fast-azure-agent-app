@@ -10,13 +10,32 @@ function closeAllDropdowns() {
     document.querySelectorAll('.menu-wrapper.open').forEach(wrapper => {
         wrapper.classList.remove('open');
     });
-    // Close model selector
-    document.getElementById('model-selector-container').classList.remove('open');
+    // Close all top-bar dropdowns (model-selector, config-dropdown)
+    document.querySelectorAll('.top-bar-dropdown.open').forEach(dropdown => {
+        dropdown.classList.remove('open');
+    });
     // Close agent model dropdowns
     document.querySelectorAll('.agent-model-dropdown.open').forEach(dropdown => {
         dropdown.classList.remove('open');
     });
     openDropdown = null;
+}
+
+// Generic dropdown initialization (reusable for any top-bar dropdown)
+function initDropdown(triggerId, containerId) {
+    const triggerBtn = document.getElementById(triggerId);
+    const container = document.getElementById(containerId);
+
+    if (triggerBtn && container) {
+        triggerBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const wasOpen = container.classList.contains('open');
+            closeAllDropdowns();
+            if (!wasOpen) {
+                container.classList.add('open');
+            }
+        });
+    }
 }
 
 // ============================================================
@@ -384,17 +403,8 @@ function renderModelSelector() {
 }
 
 function initModelSelector() {
-    const triggerBtn = document.getElementById('model-trigger-btn');
-    const container = document.getElementById('model-selector-container');
-
-    triggerBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const wasOpen = container.classList.contains('open');
-        closeAllDropdowns();
-        if (!wasOpen) {
-            container.classList.add('open');
-        }
-    });
+    // Use generic dropdown initialization
+    initDropdown('model-trigger-btn', 'model-selector-container');
 }
 
 // ============================================================
