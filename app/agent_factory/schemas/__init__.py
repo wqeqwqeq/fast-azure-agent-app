@@ -1,5 +1,6 @@
 """Schemas for Agent Factory."""
 
+from .common import MessageData, WorkflowInput
 from .config import SubAgentConfig, ToolConfig, ToolParameterConfig
 from .dynamic import (
     create_clarify_output_schema,
@@ -12,6 +13,8 @@ from .dynamic import (
 )
 
 __all__ = [
+    "MessageData",
+    "WorkflowInput",
     "SubAgentConfig",
     "ToolConfig",
     "ToolParameterConfig",

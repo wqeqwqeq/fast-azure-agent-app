@@ -46,6 +46,8 @@ from ..schemas.dynamic import (
 )
 from ..subagent_registry import SubAgentRegistry, get_registry
 
+from ..schemas.common import WorkflowInput
+
 
 # === Internal Dataclasses ===
 @dataclass
@@ -76,16 +78,6 @@ class ReviewRequest:
 @dataclass
 class StreamingRequest:
     execution_results: dict[int, list[ExecutionResult]]
-
-
-@dataclass
-class WorkflowInput:
-    query: str = ""
-    messages: list = None
-
-    def __post_init__(self):
-        if self.messages is None:
-            self.messages = []
 
 
 # === Input Processing ===
@@ -269,8 +261,9 @@ class DynamicOrchestrator(Executor):
         self._agents = agents
 
     @handler
-    async def execute(self, triage: Any, ctx: WorkflowContext) -> None:
+    async def handle_triage(self, triage: Any, ctx: WorkflowContext) -> None:
         # Handle both plan (from triage) and new_plan (from replan)
+        # Note: Method renamed from 'execute' to avoid overriding Executor.execute()
         new_plan = getattr(triage, "new_plan", None)
         if new_plan:
             # Replan case: merge with previous results

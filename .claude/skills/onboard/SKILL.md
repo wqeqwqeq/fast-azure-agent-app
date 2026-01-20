@@ -1,3 +1,8 @@
+---
+name: onboard
+description: Interactive agent factory onboarding. Use when the user runs /onboard or wants to create multi-agent applications, set up new specialized agents for a domain, or generate sub-agent configurations and tool stubs.
+---
+
 # Agent Factory Onboarding Skill
 
 When the user runs `/onboard`, follow this process to create a new agent application configuration.

@@ -61,16 +61,27 @@ def _create_workflow(
         from ..agent_factory.workflows.dynamic_workflow import (
             create_dynamic_workflow as factory_dynamic,
         )
-        from ..agent_factory.registry import get_agent_registry
-
-        # agent_factory only supports dynamic workflow
-        agent_registry = get_agent_registry()
-        return factory_dynamic(
-            agent_registry=agent_registry,
-            model_registry=registry,
-            workflow_model=workflow_model,
-            agent_mapping=agent_level_llm_overwrite,
+        from ..agent_factory.workflows.triage_workflow import (
+            create_triage_workflow as factory_triage,
         )
+        from ..agent_factory.subagent_registry import get_registry
+
+        sub_registry = get_registry()
+
+        if react_mode:
+            return factory_dynamic(
+                sub_registry=sub_registry,
+                model_registry=registry,
+                workflow_model=workflow_model,
+                agent_mapping=agent_level_llm_overwrite,
+            )
+        else:
+            return factory_triage(
+                sub_registry=sub_registry,
+                model_registry=registry,
+                workflow_model=workflow_model,
+                agent_mapping=agent_level_llm_overwrite,
+            )
 
 router = APIRouter()
 
