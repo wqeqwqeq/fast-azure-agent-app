@@ -16,14 +16,61 @@ from ..config import get_settings
 from ..dependencies import CurrentUserDep, HistoryManagerDep
 from ..core.events import set_current_message_seq, set_current_queue
 from ..opsagent.schemas.common import MessageData, WorkflowInput
-from ..opsagent.workflows.dynamic_workflow import create_dynamic_workflow
-from ..opsagent.workflows.triage_workflow import create_triage_workflow
 from ..schemas import SendMessageRequest
 
 logger = logging.getLogger(__name__)
 
 # Regex to extract JSON data from SSE event string
 SSE_DATA_PATTERN = re.compile(r"data: (.+)\n")
+
+
+def _create_workflow(
+    use_demo_opsagent: bool,
+    react_mode: bool,
+    registry,
+    workflow_model: str,
+    agent_level_llm_overwrite,
+):
+    """Create the appropriate workflow based on configuration.
+
+    Args:
+        use_demo_opsagent: If True, use opsagent workflows; if False, use agent_factory
+        react_mode: If True, use dynamic workflow; if False, use triage workflow
+        registry: Model registry for cloud deployment
+        workflow_model: Model to use for all agents
+        agent_level_llm_overwrite: Per-agent model overrides
+
+    Returns:
+        Configured workflow instance
+    """
+    if use_demo_opsagent:
+        # Use opsagent workflows (demo application)
+        from ..opsagent.workflows.dynamic_workflow import (
+            create_dynamic_workflow as opsagent_dynamic,
+        )
+        from ..opsagent.workflows.triage_workflow import (
+            create_triage_workflow as opsagent_triage,
+        )
+
+        if react_mode:
+            return opsagent_dynamic(registry, workflow_model, agent_level_llm_overwrite)
+        else:
+            return opsagent_triage(registry, workflow_model, agent_level_llm_overwrite)
+    else:
+        # Use agent_factory workflows (configurable application)
+        from ..agent_factory.workflows.dynamic_workflow import (
+            create_dynamic_workflow as factory_dynamic,
+        )
+        from ..agent_factory.registry import get_agent_registry
+
+        # agent_factory only supports dynamic workflow
+        agent_registry = get_agent_registry()
+        return factory_dynamic(
+            agent_registry=agent_registry,
+            model_registry=registry,
+            workflow_model=workflow_model,
+            agent_mapping=agent_level_llm_overwrite,
+        )
 
 router = APIRouter()
 
@@ -135,10 +182,14 @@ async def send_message(
 
                 # Create fresh workflow for this request with resolved model config
                 # Use react_mode from request body (default: False = triage workflow)
-                if body.react_mode:
-                    workflow = create_dynamic_workflow(registry, workflow_model, agent_level_llm_overwrite)
-                else:
-                    workflow = create_triage_workflow(registry, workflow_model, agent_level_llm_overwrite)
+                settings = get_settings()
+                workflow = _create_workflow(
+                    use_demo_opsagent=settings.use_demo_opsagent,
+                    react_mode=body.react_mode,
+                    registry=registry,
+                    workflow_model=workflow_model,
+                    agent_level_llm_overwrite=agent_level_llm_overwrite,
+                )
 
                 # Auto-detect streaming executors from workflow (those with output_response=True)
                 streaming_executor_ids = {
