@@ -1,14 +1,14 @@
 """Triage Agent for routing user queries to specialized agents.
 
 This agent routes queries to appropriate sub-agents.
-Prompt and schema are built dynamically from SubAgentRegistry.
+The instructions template contains {placeholders} that should be filled by Claude
+during /onboard skill execution. Claude can also modify any other text as needed.
 """
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
 from ...factory import create_agent
-from ...prompts.templates import TRIAGE_TEMPLATE
 from ...schemas.dynamic import create_triage_output_schema
 
 if TYPE_CHECKING:
@@ -21,36 +21,57 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class TriageAgentConfig:
-    """Configuration for Triage agent with build methods."""
+    """Configuration for Triage agent.
+
+    The instructions field is a template with {placeholders}.
+    When running /onboard, Claude should:
+    1. Fill {placeholders} with domain-specific content
+    2. Modify any other text as needed
+    3. DO NOT modify the Output Format section (captured by schema)
+    """
 
     name: str = "triage-agent"
     description: str = "Routes user queries to specialized agents"
 
-    def build_prompt(self, registry: "SubAgentRegistry") -> str:
-        """Build the triage prompt from registry.
+    # Template with {placeholders} - Claude fills these during /onboard
+    instructions: str = """You are a triage agent for {domain_purpose}. Your job is to analyze the user's **LATEST question** and route it to the appropriate specialized agent(s).
 
-        Args:
-            registry: SubAgentRegistry with sub-agent configurations
+## IMPORTANT: Focus on the Latest Question
+- **Primary focus**: The user's most recent message (the last user message in the conversation)
+- **Conversation history**: Use previous messages ONLY as context to resolve references (e.g., {reference_examples})
+- Do NOT re-process or re-route previous questions - only handle the current one
 
-        Returns:
-            Complete prompt string with agent descriptions filled in
-        """
-        return TRIAGE_TEMPLATE.format(
-            domain_name=registry.domain_name,
-            domain_description=registry.domain_description,
-            agent_descriptions=registry.generate_descriptions(),
-            additional_instructions="",
-        )
+## Specialized Agents Available:
+{agent_summaries}
+
+## Your Task:
+1. Identify what the user is asking in their LATEST message
+2. If UNRELATED to any specialized agent, set should_reject=true
+3. If related, create task(s) for appropriate agent(s)
+4. When the latest question references something from history, resolve the reference into a clear, specific, self-contained task question
+
+## Output Format (JSON):
+{
+  "should_reject": false,
+  "reject_reason": "",
+  "tasks": [
+    {"question": "Clear, specific task question", "agent": "agent_key"}
+  ]
+}
+
+## Routing Examples:
+{routing_examples}
+
+## Decision Guidelines:
+{decision_guidelines}
+"""
+
+    def build_prompt(self) -> str:
+        """Return the instructions (already filled by Claude during /onboard)."""
+        return self.instructions
 
     def build_schema(self, registry: "SubAgentRegistry") -> type["BaseModel"]:
-        """Build the output schema from registry.
-
-        Args:
-            registry: SubAgentRegistry with sub-agent configurations
-
-        Returns:
-            Pydantic model class with valid agent keys
-        """
+        """Build the output schema from registry."""
         return create_triage_output_schema(registry.agent_keys)
 
 
@@ -62,7 +83,7 @@ def create_triage_agent(
     model_registry: Optional["ModelRegistry"] = None,
     model_name: Optional["ModelName"] = None,
 ) -> "ChatAgent":
-    """Create the Triage agent with dynamic prompt and schema.
+    """Create the Triage agent.
 
     Args:
         sub_registry: SubAgentRegistry with sub-agent configurations
@@ -75,7 +96,7 @@ def create_triage_agent(
     return create_agent(
         name=CONFIG.name,
         description=f"Routes queries to {sub_registry.domain_name} agents",
-        instructions=CONFIG.build_prompt(sub_registry),
+        instructions=CONFIG.build_prompt(),
         registry=model_registry,
         model_name=model_name,
         response_format=CONFIG.build_schema(sub_registry),

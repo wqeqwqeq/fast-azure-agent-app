@@ -29,6 +29,15 @@ class ToolConfig(BaseModel):
     implementation_hint: Optional[str] = Field(default=None, description="Implementation hint")
 
 
+class UseCaseConfig(BaseModel):
+    """A use case for an agent - helps triage understand when to route here."""
+
+    intent: str = Field(..., description="What user wants to accomplish")
+    example_queries: list[str] = Field(
+        default_factory=list, description="Example user queries for this use case"
+    )
+
+
 class SubAgentConfig(BaseModel):
     """Configuration for a sub-agent."""
 
@@ -38,3 +47,14 @@ class SubAgentConfig(BaseModel):
     capabilities: list[str] = Field(..., description="List of capabilities")
     tools: list[ToolConfig] = Field(default_factory=list, description="Tools for this agent")
     instructions: Optional[str] = Field(default=None, description="Custom system prompt")
+
+    # Context for orchestration agents (used by Claude when filling prompts)
+    use_cases: list[UseCaseConfig] = Field(
+        default_factory=list, description="Use cases with example queries"
+    )
+    when_to_use: list[str] = Field(
+        default_factory=list, description="Scenarios where triage should route here"
+    )
+    when_not_to_use: list[str] = Field(
+        default_factory=list, description="Scenarios where another agent is better"
+    )
