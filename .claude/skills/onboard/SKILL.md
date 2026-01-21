@@ -210,7 +210,7 @@ Handles salary, compensation, and payment queries.
 """
 ```
 
-### Key Principle
+### Key Principles
 
 **The template is just a starting point.** Claude should:
 1. Fill `{placeholders}` with domain-specific content
@@ -218,6 +218,7 @@ Handles salary, compensation, and payment queries.
 3. Add sections if needed for this domain
 4. Remove irrelevant sections
 5. **NEVER modify output format** (captured by schema)
+6. **ALWAYS write in English** - all prompts must be in English regardless of user's language
 
 ---
 
@@ -257,9 +258,69 @@ Would you like me to help implement any of the tool functions?
 ## Phase 5: Tool Implementation (Optional)
 
 If the user wants help implementing tools:
-1. Ask for implementation details (API endpoints, business logic, data sources)
-2. Generate working implementations for the tool functions
-3. Replace the `NotImplementedError` stubs with actual code
+
+### Step 1: Gather Requirements
+Ask for implementation details (API endpoints, business logic, data sources, SDKs to use)
+
+### Step 2: Add Dependencies
+Before implementing, add required packages:
+```bash
+uv add <package-name>
+```
+
+Example for Azure tools:
+```bash
+uv add azure-identity azure-mgmt-storage azure-storage-blob azure-keyvault-secrets azure-mgmt-keyvault
+```
+
+### Step 3: Implement Tools
+- Replace the `NotImplementedError` stubs with actual code
+- Use SDK best practices (check official documentation)
+- Keep tools simple - avoid over-parsing SDK responses
+- For data plane operations (e.g., list blobs, get secrets), usually only need resource name, NOT resource group
+
+### Step 4: Test Each Tool (CRITICAL)
+After implementation, create a test file to verify each tool works:
+
+```python
+# test_tools.py (create in project root)
+"""Quick test for tool functions."""
+
+import asyncio
+from app.agent_factory.agents.sub_agents.tools.{key}_tools import (
+    tool_function_1,
+    tool_function_2,
+)
+
+def test_tool_function_1():
+    """Test tool_function_1."""
+    result = tool_function_1(param1="test_value")
+    print(f"tool_function_1 result:\n{result}\n")
+    assert "error" not in result.lower(), f"Tool returned error: {result}"
+
+def test_tool_function_2():
+    """Test tool_function_2."""
+    result = tool_function_2(param1="test_value", param2="test_value2")
+    print(f"tool_function_2 result:\n{result}\n")
+    assert "error" not in result.lower(), f"Tool returned error: {result}"
+
+if __name__ == "__main__":
+    print("Testing tools...\n")
+    test_tool_function_1()
+    test_tool_function_2()
+    print("All tools passed!")
+```
+
+Run the test:
+```bash
+uv run python test_tools.py
+```
+
+### Step 5: Iterate Until All Tools Pass
+- If a tool fails, fix the implementation
+- Re-run the test
+- Repeat until all tools pass
+- Delete the test file after verification (or keep for future use)
 
 ---
 
@@ -271,6 +332,7 @@ If the user wants help implementing tools:
 - Use `Annotated` type hints for parameters
 - **Orchestration prompts are filled by Claude (LLM), not Python string parsing**
 - **DO NOT modify output format sections** in orchestration agents (captured by schema)
+- **ALWAYS write prompts in English** - all orchestration agent prompts and sub-agent instructions must be in English, regardless of the user's language or domain
 - Infer parameter types from descriptions when not explicitly provided
 
 ---
