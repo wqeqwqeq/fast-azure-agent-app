@@ -22,7 +22,7 @@ def create_agent(
     name: str,
     description: str,
     instructions: str,
-    model_registry: Optional[ModelRegistry] = None,
+    registry: Optional[ModelRegistry] = None,
     model_name: Optional[ModelName] = None,
     response_format: Optional[Type] = None,
     tools: Optional[List] = None,
@@ -30,16 +30,16 @@ def create_agent(
     """Create ChatAgent with model configuration.
 
     Supports three modes:
-    - Mode 1 (Local Dev): No model_registry provided, uses environment variables
-    - Mode 2 (Cloud): model_registry provided with model_name
-    - Mode 3 (Cloud + Override): model_registry with per-agent model mapping
+    - Mode 1 (Local Dev): No registry provided, uses environment variables
+    - Mode 2 (Cloud): Registry provided with model_name
+    - Mode 3 (Cloud + Override): Registry with per-agent model mapping
 
     Args:
         name: Agent name (used in middleware for identifying orchestration agents)
         description: Agent description
         instructions: System prompt
-        model_registry: ModelRegistry for cloud mode, None for env settings
-        model_name: Model to use (required when model_registry provided)
+        registry: ModelRegistry for cloud mode, None for env settings
+        model_name: Model to use (required when registry provided)
         response_format: Optional Pydantic output schema
         tools: Optional list of tool functions
 
@@ -47,19 +47,19 @@ def create_agent(
         Configured ChatAgent instance
 
     Raises:
-        ValueError: If model_registry is provided but model_name is None
+        ValueError: If registry is provided but model_name is None
     """
-    if model_registry is None:
+    if registry is None:
         # Mode 1: env settings for local dev
         env = AzOpenAIEnvSettings()
         api_key = env.azure_openai_api_key
         endpoint = env.azure_openai_endpoint
         deployment_name = env.azure_openai_deployment_name
     else:
-        # Mode 2/3: model_registry (model_name required)
+        # Mode 2/3: registry (model_name required)
         if model_name is None:
-            raise ValueError("model_name is required when model_registry is provided")
-        resolved = model_registry.get(model_name)
+            raise ValueError("model_name is required when registry is provided")
+        resolved = registry.get(model_name)
         api_key = resolved.api_key
         endpoint = resolved.endpoint
         deployment_name = resolved.deployment_name
