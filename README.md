@@ -25,14 +25,152 @@ This project provides all that infrastructure out-of-the-box. You focus only on:
 
 ## Architecture
 
-<!-- TODO: Add architecture diagrams -->
-
-- [ ] Azure Architecture Diagram
-- [ ] Triage/Dynamic Workflow Diagram
-- [ ] Storage Strategy Diagram
-- [ ] Memory Design Diagram
-
 **Tech Stack:** FastAPI | Azure PostgreSQL | Azure Redis | Microsoft Agent Framework | Azure OpenAI
+
+### Azure Architecture
+
+![Azure Architecture](png/azure_diagram.png)
+
+---
+
+### Workflow Diagrams
+
+#### Triage Workflow
+
+```mermaid
+graph LR
+    Start([User Query]) --> Triage[Triage Plan Agent<br/>Query Router]
+    Triage --> Decision{Route Query}
+
+    Decision -->|Reject| Reject([Rejection Response])
+    Decision -->|Has Tasks| Dispatcher[Dispatcher<br/>Filter by triage.tasks]
+
+    subgraph "Concurrent execution"
+        SNAgent[ServiceNow Agent<br/>ITSM Operations]
+        LAAgent[Log Analytics Agent<br/>ADF Monitoring]
+        SHAgent[Service Health Agent<br/>Health Checks]
+    end
+
+    Dispatcher -->|"fan-out<br/>(when relevant)"| SNAgent
+    Dispatcher -->|"fan-out<br/>(when relevant)"| LAAgent
+    Dispatcher -->|"fan-out<br/>(when relevant)"| SHAgent
+
+    SNAgent -->|fan-in| Summary[Aggregator<br/>Summary Agent]
+    LAAgent -->|fan-in| Summary
+    SHAgent -->|fan-in| Summary
+
+    Summary --> End([Response to User])
+
+    classDef triageClass fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+    classDef agentClass fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    classDef decisionClass fill:#ffebee,stroke:#b71c1c,stroke-width:2px
+    classDef workflowClass fill:#fff3e0,stroke:#e65100,stroke-width:2px
+
+    class Triage triageClass
+    class SNAgent,LAAgent,SHAgent agentClass
+    class Decision,Reject decisionClass
+    class Dispatcher,Summary workflowClass
+```
+
+#### Dynamic Workflow
+
+```mermaid
+graph LR
+    Start([User Query]) --> Plan
+
+    subgraph Triage["Triage Executor"]
+        Plan[Plan Agent]
+        Replan[Replan Agent]
+    end
+
+    Plan --> Replan
+    Plan --> Decision{Route}
+    Replan --> Decision
+
+    linkStyle 1 stroke-width:0px
+
+    Decision -->|Reject| Reject([Rejection])
+    Decision -->|Clarify| Clarify([Clarification])
+    Decision -->|Execute| Orchestrator[Step-based Orchestrator<br/>See patterns below]
+
+    Orchestrator --> Review[Review Agent]
+    Review -->|Complete| Summary[Summary Agent]
+    Review -->|Incomplete| Replan
+    Replan -->|"Reject Review"| Summary
+
+    Summary --> End([Response])
+
+    classDef triageClass fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+    classDef decisionClass fill:#ffebee,stroke:#b71c1c,stroke-width:2px
+    classDef workflowClass fill:#fff3e0,stroke:#e65100,stroke-width:2px
+
+    class Plan,Replan triageClass
+    class Decision,Reject,Clarify decisionClass
+    class Orchestrator,Review,Summary workflowClass
+```
+
+**Key Differences:**
+| Feature | Triage Workflow | Dynamic Workflow |
+|---------|-----------------|------------------|
+| Routing | Classification-based | Plan/Replan agents |
+| Execution | All parallel fan-out | Step-based (sequential/parallel) |
+| Review | None | Review Agent checks completeness |
+| Iteration | Single pass | Loop with max_iterations=10 |
+
+---
+
+### Storage Strategy (Write-Through Cache)
+
+#### Write Flow
+
+```mermaid
+graph LR
+    User([User Login]) --> CreateChat[Create Chat<br/>POST /conversations]
+    CreateChat --> CreateMsg[Create Message<br/>POST /conversations/id/messages]
+    CreateMsg --> PG[(PostgreSQL<br/>Source of Truth)]
+
+    PG --> CT["conversation table<br/>• conv_id, user_id<br/>• title, model<br/>• created_at, last_modified"]
+    PG --> MT["message table<br/>• conv_id, msg_id<br/>• role, content, time"]
+
+    PG -->|Write Success| Redis[(Redis Cache<br/>TTL: 30min)]
+    Redis --> Done([Done])
+
+    classDef dbClass fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    classDef cacheClass fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef tableClass fill:#e3f2fd,stroke:#1565c0,stroke-width:1px
+
+    class PG dbClass
+    class Redis cacheClass
+    class CT,MT tableClass
+```
+
+#### Read Flow
+
+```mermaid
+graph LR
+    User([GET /conversations/id]) --> Redis[(Redis Cache)]
+    Redis -->|Hit| Return([Return Data])
+    Redis -->|Miss| PG[(PostgreSQL)]
+    PG --> Backfill[Backfill Cache]
+    Backfill --> Redis
+
+    classDef dbClass fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    classDef cacheClass fill:#fff3e0,stroke:#e65100,stroke-width:2px
+
+    class PG dbClass
+    class Redis cacheClass
+```
+
+**Write-Through Pattern:**
+1. **Write Path**: All writes go to PostgreSQL first (source of truth), then update Redis cache
+2. **Read Path**: Check Redis first → on cache miss, read from PostgreSQL and populate cache
+3. **TTL**: Redis cache expires after 30 minutes to prevent stale data
+
+---
+
+### Memory Design
+
+See [Memory Agent Design](app/memory_agent/design.md) for detailed sliding window summarization algorithm and simulation.
 
 ## Quick Start
 
