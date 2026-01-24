@@ -15,10 +15,8 @@ from agent_framework._workflows._events import AgentRunUpdateEvent, WorkflowOutp
 from ..config import get_settings
 from ..dependencies import CurrentUserDep, HistoryManagerDep
 from ..core.events import set_current_message_seq, set_current_queue
-from ..opsagent.schemas.common import MessageData, WorkflowInput
-from ..opsagent.workflows.dynamic_workflow import create_dynamic_workflow
-from ..opsagent.workflows.triage_workflow import create_triage_workflow
 from ..schemas import SendMessageRequest
+from ..utils.workflow import create_workflow_and_input
 
 logger = logging.getLogger(__name__)
 
@@ -133,20 +131,6 @@ async def send_message(
                 # Get model registry from app state
                 registry = request.app.state.model_registry
 
-                # Create fresh workflow for this request with resolved model config
-                # Use react_mode from request body (default: False = triage workflow)
-                if body.react_mode:
-                    workflow = create_dynamic_workflow(registry, workflow_model, agent_level_llm_overwrite)
-                else:
-                    workflow = create_triage_workflow(registry, workflow_model, agent_level_llm_overwrite)
-
-                # Auto-detect streaming executors from workflow (those with output_response=True)
-                streaming_executor_ids = {
-                    executor_id
-                    for executor_id, executor in workflow.executors.items()
-                    if getattr(executor, 'output_response', False)
-                }
-
                 # Get memory context for workflow (only if use_memory is enabled)
                 if body.use_memory:
                     memory_service = request.app.state.memory_service
@@ -163,8 +147,24 @@ async def send_message(
                 if context_prefix:
                     user_content = f"{context_prefix}\n\n{user_content}"
 
-                message_data = [MessageData(role="user", text=user_content)]
-                input_data = WorkflowInput(messages=message_data)
+                # Create fresh workflow and input for this request with resolved model config
+                # Use react_mode from request body (default: False = triage workflow)
+                settings = get_settings()
+                workflow, input_data = create_workflow_and_input(
+                    use_demo_opsagent=settings.use_demo_opsagent,
+                    react_mode=body.react_mode,
+                    registry=registry,
+                    workflow_model=workflow_model,
+                    agent_level_llm_overwrite=agent_level_llm_overwrite,
+                    user_content=user_content,
+                )
+
+                # Auto-detect streaming executors from workflow (those with output_response=True)
+                streaming_executor_ids = {
+                    executor_id
+                    for executor_id, executor in workflow.executors.items()
+                    if getattr(executor, 'output_response', False)
+                }
 
                 # Run workflow with streaming
                 # Middleware events (function_start/end, agent events) are emitted
