@@ -6,7 +6,7 @@
 
 ## Demo
 
-[![Watch the Demo](https://img.youtube.com/vi/uqrNaFS9uqM/maxresdefault.jpg)](https://www.youtube.com/watch?v=uqrNaFS9uqM)
+ <video src="https://github.com/user-attachments/assets/75183246-8dff-4b77-aada-d7f77826c9ae" controls width="100%"></video>  
 
 ## Why This Project
 
