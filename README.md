@@ -1,6 +1,6 @@
 # fast-azure-agent-app
 
-**Production-ready multi-agent infrastructure on Azure**
+**Production-ready multi-agent app in ChatGPT style, using Azure Stack**
 
 [![GitHub](https://img.shields.io/badge/GitHub-Repository-blue?logo=github)](https://github.com/wqeqwqeq/fast-azure-agent-app)
 
