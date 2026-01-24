@@ -2,9 +2,51 @@
 
 **Production-ready multi-agent infrastructure on Azure**
 
+[![GitHub](https://img.shields.io/badge/GitHub-Repository-blue?logo=github)](https://github.com/wqeqwqeq/fast-azure-agent-app)
+
+## Demo
+
+[![Watch the Demo](https://img.youtube.com/vi/uqrNaFS9uqM/maxresdefault.jpg)](https://www.youtube.com/watch?v=uqrNaFS9uqM)
+
 ## Why This Project
 
-Building an LLM agent with tool-calling is easy. Building a complete production stack—chat UI, conversation history, memory management, observability, authentication, multi-agent workflows, async API backend, and SSE streaming—takes significant engineering effort.
+Whether you're using **Microsoft Agent Framework**, **LangGraph**, or **OpenAI Agent SDK**, the getting-started experience is remarkably similar:
+
+```python
+# Define your tools
+@tool
+def search_database(query: str) -> str:
+    return db.search(query)
+
+# Create your agent
+agent = Agent(
+    model="gpt-4",
+    tools=[search_database],
+    system_prompt="You are a helpful assistant..."
+)
+
+# Run it
+response = agent.run("Find all orders from last week")
+print(response)
+```
+
+In under 20 lines of code, you have a working AI agent. The abstractions are elegant. You can go from zero to "agent printing to console" in minutes.
+
+**But here's what nobody tells you:**
+
+The moment you want to turn this into a real chat application—something your users can actually interact with, like ChatGPT—you suddenly face a mountain of engineering challenges:
+
+- **How do I stream responses in real-time?** Users expect to see tokens appear as they're generated
+- **Where do I store conversation history?** And how do I make it fast enough for real-time chat?
+- **What happens when conversations get long?** Context windows have limits
+- **How do I show users what the agent is doing?** When it's thinking, calling tools, processing results
+- **How do I handle authentication?** Multiple users, multiple conversations, data isolation
+- **How do I observe what's happening in production?** When something goes wrong at 3 AM
+- **What if I need multiple agents working together?** How do I orchestrate workflows?
+
+Each of these is a substantial engineering project. Together, they represent weeks or months of work.
+
+---
 
 This project provides all that infrastructure out-of-the-box. You focus only on:
 - **Prompt engineering** - Define your agent's behavior
