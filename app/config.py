@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     dynamic_plan: bool = False
 
     # Agent factory toggle: True = use opsagent (demo), False = use agent_factory
-    use_demo_opsagent: bool = False
+    use_demo_opsagent: bool = True
 
     # Memory feature toggle (can be overridden per-request)
     use_memory: bool = True
